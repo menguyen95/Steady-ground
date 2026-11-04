@@ -30,7 +30,19 @@ That address is what you give patients. Nobody can see patient data through it; 
 
 ### Updating the app later
 
-Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v2` to `steady-ground-v3` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v3` to `steady-ground-v4` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+
+## Engagement features (version 3)
+
+- **Milestones.** 26 milestones across calming practice, tracking, course, movement, planning and sharing. Reached milestones pop up as a short celebration card; all of them are listed under Today, then Milestones. Wording is deliberately non-punitive: a missed day is never called a broken streak.
+- **Practice ring.** The Today screen shows how many of the last 7 days had a calming practice, the total count, and the current run.
+- **After-practice feedback.** Every calming tool ends with the practice count, the before/after stress change, and a short encouraging line.
+- **Today's one thing.** A single suggested next action (a practice, the next course step, or planning the day) so patients never face a blank screen.
+- **Welcome back.** After three or more days away, a gentle restart card rather than a guilt message.
+- **Daily reminder.** Settings can add a repeating "Steady Ground practice" event to the phone's calendar via the share sheet (web apps cannot send notifications on iPhone).
+- **Large text** option in Settings.
+
+Edit the milestone list (`BADGES`) and encouragement lines (`ENCOURAGE`) near the top of `app.js` to change these.
 
 ## Installing on an iPhone
 

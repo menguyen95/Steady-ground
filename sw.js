@@ -1,6 +1,6 @@
 /* Steady Ground service worker: caches the app so it opens offline.
    Bump CACHE when you change any file, so installed phones pick up the update. */
-var CACHE = 'steady-ground-v2';
+var CACHE = 'steady-ground-v3';
 var FILES = [
   './', './index.html', './styles.css', './app.js', './course.js', './jspdf.umd.min.js',
   './manifest.webmanifest',

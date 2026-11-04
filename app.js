@@ -8,14 +8,15 @@ function testStore(){ try { localStorage.setItem('sg-t','1'); localStorage.remov
 var canStore = testStore();
 function blank(){
   return { setup:{done:false, mode:''}, episodes:[], grounding:[], thoughts:[], checkins:{}, weeks:{}, goals:[], activity:[], plan:{},
-           flare:{signs:'',helps:'',contacts:'',pause:''}, read:{}, course:{answers:{}, done:{}, read:{}} };
+           flare:{signs:'',helps:'',contacts:'',pause:''}, read:{}, course:{answers:{}, done:{}, read:{}},
+           badges:{}, badgesInit:false, prefs:{textSize:'normal'}, stats:{shares:0}, lastOpen:0 };
 }
 var state = blank();
 function mergeInto(p){
   var b = blank();
   for (var k in b) {
     if (p && p[k] !== undefined && p[k] !== null) {
-      if (k === 'course' || k === 'setup' || k === 'flare') { for (var kk in b[k]) if (p[k][kk] !== undefined) b[k][kk] = p[k][kk]; }
+      if (k === 'course' || k === 'setup' || k === 'flare' || k === 'prefs' || k === 'stats') { for (var kk in b[k]) if (p[k][kk] !== undefined) b[k][kk] = p[k][kk]; }
       else b[k] = p[k];
     }
   }
@@ -177,13 +178,124 @@ var LESSONS = [
     'Be as kind to yourself as you would be to a friend. Write your plan now, while you are feeling well.']}
 ];
 
+/* ---------- practice stats and milestones ---------- */
+function practiceDaySet(){ var s = {}; state.grounding.forEach(function(g){ s[dayKey(g.ts)] = 1; }); return s; }
+function practiceRun(){
+  var set = practiceDaySet(), d = new Date(), i = set[dayKey(d)] ? 0 : 1, run = 0;
+  for (; i < 400; i++) { if (set[dayKey(addDays(d, -i))]) run++; else break; }
+  return run;
+}
+function practiceLast7(){ var set = practiceDaySet(); return lastDays(7).filter(function(k){ return set[k]; }).length; }
+function practicedToday(){ return !!practiceDaySet()[dayKey(new Date())]; }
+function paceDaysMet(){
+  var n = 0, today = dayKey(new Date());
+  state.goals.forEach(function(g){ var d = parseKey(g.since || today); for (var i = 0; i < 400; i++) { var k = dayKey(addDays(d, i)); if (k > today) break; if (goalMins(g, k) >= g.target) n++; } });
+  return n;
+}
+function stats(){
+  var cp = courseProgress(), s1 = findSession(1), s1done = false;
+  if (s1) s1done = !!state.course.read[1] && (s1.homework || []).every(function(h){ return state.course.done[hwKey(s1, h)]; });
+  var maxDrop = 0; state.grounding.forEach(function(g){ if (g.before >= 0 && g.after >= 0) maxDrop = Math.max(maxDrop, g.before - g.after); });
+  var f = state.flare;
+  return {
+    ground: state.grounding.length, maxDrop: maxDrop, last7: practiceLast7(), run: practiceRun(),
+    episodes: state.episodes.length, checkins: Object.keys(state.checkins).filter(function(k){ var c = state.checkins[k]; return c.mood || c.energy; }).length,
+    weeks: Object.keys(state.weeks).filter(function(k){ var w = state.weeks[k]; return w.functioning != null || w.signs || w.stopped; }).length,
+    thoughts: state.thoughts.length, s1done: s1done, coursePct: cp.pct, courseTotal: cp.total,
+    moves: state.activity.filter(function(a){ return a.kind === 'move'; }).length, paceDays: paceDaysMet(),
+    flare: !!(f.signs && f.helps), shares: state.stats.shares || 0
+  };
+}
+var BADGES = [
+  {id:'ground1', cat:'calm', name:'First practice', how:'Complete one calming practice', test:function(s){ return s.ground >= 1; }},
+  {id:'ground10', cat:'calm', name:'Ten practices', how:'Complete 10 calming practices', test:function(s){ return s.ground >= 10; }},
+  {id:'ground25', cat:'calm', name:'Twenty-five practices', how:'Complete 25 calming practices', test:function(s){ return s.ground >= 25; }},
+  {id:'ground50', cat:'calm', name:'Fifty practices', how:'Complete 50 calming practices', test:function(s){ return s.ground >= 50; }},
+  {id:'ground100', cat:'calm', name:'One hundred practices', how:'Complete 100 calming practices', test:function(s){ return s.ground >= 100; }},
+  {id:'drop3', cat:'calm', name:'Felt the shift', how:'A practice where your stress fell by 3 points or more', test:function(s){ return s.maxDrop >= 3; }},
+  {id:'week5', cat:'calm', name:'Five of seven', how:'Practise on 5 of the last 7 days', test:function(s){ return s.last7 >= 5; }},
+  {id:'run3', cat:'calm', name:'Three days running', how:'Practise three days in a row', test:function(s){ return s.run >= 3; }},
+  {id:'run7', cat:'calm', name:'A week running', how:'Practise seven days in a row', test:function(s){ return s.run >= 7; }},
+  {id:'ep1', cat:'track', name:'First entry', how:'Log your first episode', test:function(s){ return s.episodes >= 1; }},
+  {id:'ep10', cat:'track', name:'Pattern finder', how:'Log 10 episodes, enough to start seeing patterns', test:function(s){ return s.episodes >= 10; }},
+  {id:'check7', cat:'track', name:'Seven check-ins', how:'Do the daily check-in on 7 days', test:function(s){ return s.checkins >= 7; }},
+  {id:'check30', cat:'track', name:'Thirty check-ins', how:'Do the daily check-in on 30 days', test:function(s){ return s.checkins >= 30; }},
+  {id:'week1', cat:'track', name:'Week in review', how:'Fill in a weekly summary', test:function(s){ return s.weeks >= 1; }},
+  {id:'th1', cat:'track', name:'First thought record', how:'Complete a thought record', test:function(s){ return s.thoughts >= 1; }},
+  {id:'th5', cat:'track', name:'Five thought records', how:'Complete 5 thought records', test:function(s){ return s.thoughts >= 5; }},
+  {id:'s1', cat:'course', name:'Session 1 complete', how:'Read Session 1 and finish its homework', test:function(s){ return s.s1done; }},
+  {id:'course25', cat:'course', name:'A quarter of the way', how:'Complete 25% of the course', test:function(s){ return s.courseTotal && s.coursePct >= 25; }},
+  {id:'course50', cat:'course', name:'Halfway there', how:'Complete half the course', test:function(s){ return s.courseTotal && s.coursePct >= 50; }},
+  {id:'course100', cat:'course', name:'Course complete', how:'Finish all ten sessions', test:function(s){ return s.courseTotal && s.coursePct >= 100; }},
+  {id:'move1', cat:'move', name:'First movement', how:'Complete a movement exercise', test:function(s){ return s.moves >= 1; }},
+  {id:'move10', cat:'move', name:'Ten movements', how:'Complete 10 movement exercises', test:function(s){ return s.moves >= 10; }},
+  {id:'pace1', cat:'plan', name:'Steady amount met', how:'Meet a pacing target for a day', test:function(s){ return s.paceDays >= 1; }},
+  {id:'pace7', cat:'plan', name:'Seven steady days', how:'Meet pacing targets on 7 days', test:function(s){ return s.paceDays >= 7; }},
+  {id:'flare', cat:'plan', name:'Plan in place', how:'Write your flare plan', test:function(s){ return s.flare; }},
+  {id:'share1', cat:'share', name:'Shared with clinic', how:'Share a report with your clinic', test:function(s){ return s.shares >= 1; }}
+];
+var CAT_NAMES = { calm:'Calming practice', track:'Tracking', course:'Course', move:'Movement', plan:'Planning', share:'Sharing' };
+var CAT_ICONS = {
+  calm:'<path d="M3 12c3-3 6-3 9 0s6 3 9 0M3 17c3-3 6-3 9 0s6 3 9 0M3 7c3-3 6-3 9 0s6 3 9 0"/>',
+  track:'<path d="M6 4h10l3 3v13H6zM9 11h7M9 15h5"/>',
+  course:'<path d="M4 5.5C6 4.5 9 4.5 12 6c3-1.5 6-1.5 8-.5V19c-2-1-5-1-8 .5-3-1.5-6-1.5-8-.5zM12 6v13.5"/>',
+  move:'<circle cx="13" cy="4" r="1.5"/><path d="M9 20l3-7 3 3 1 4M8 11l4-3 3 2 2 3"/>',
+  plan:'<path d="M4 19h5v-5h5v-5h6"/>',
+  share:'<path d="M12 16V4M7 9l5-5 5 5M5 14v6h14v-6"/>'
+};
+function badgeIcon(cat){ return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (CAT_ICONS[cat] || CAT_ICONS.calm) + '</svg>'; }
+var ENCOURAGE = [
+  'Every practice teaches your nervous system that it can settle.',
+  'You did the work. That is what changes things over time.',
+  'Showing up on an ordinary day counts just as much.',
+  'Small and regular beats big and rare.',
+  'That is one more piece of evidence that you can influence how you feel.',
+  'Practising while calm makes the skill easier to reach when you need it.'
+];
+function encourage(){ return ENCOURAGE[Math.floor(Math.random() * ENCOURAGE.length)]; }
+function checkMilestones(){
+  var s = stats(), fresh = [];
+  if (!state.badgesInit) {
+    BADGES.forEach(function(b){ if (b.test(s)) state.badges[b.id] = Date.now(); });
+    state.badgesInit = true; save(); return;
+  }
+  BADGES.forEach(function(b){ if (!state.badges[b.id] && b.test(s)) { state.badges[b.id] = Date.now(); fresh.push(b); } });
+  if (fresh.length) { save(); ui.celebrate = ui.celebrate.concat(fresh); try { if (navigator.vibrate) navigator.vibrate(30); } catch(e){} }
+}
+function viewCelebration(){
+  var b = ui.celebrate[0];
+  return '<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="celTitle"><div class="cel-card">' +
+    '<div class="medal medal-' + b.cat + '">' + badgeIcon(b.cat) + '</div>' +
+    '<p class="eyebrow">Milestone</p><h2 id="celTitle">' + esc(b.name) + '</h2><p>' + esc(b.how) + '.</p><p class="hint">' + esc(encourage()) + '</p>' +
+    '<div class="row"><button type="button" class="btn btn-primary" data-action="cel-next">' + (ui.celebrate.length > 1 ? 'Next' : 'Keep going') + '</button><button type="button" class="btn btn-quiet" data-action="goto-milestones">See all milestones</button></div></div></div>';
+}
+function ring(pct, label, sub){
+  var r = 34, c = 2 * Math.PI * r, off = c * (1 - Math.min(1, pct));
+  return '<div class="ring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="ring-bg" cx="40" cy="40" r="' + r + '"/><circle class="ring-fg" cx="40" cy="40" r="' + r + '" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/></svg><div class="ring-txt"><span class="ring-big">' + label + '</span><span class="ring-sub">' + sub + '</span></div></div>';
+}
+function viewMilestones(){
+  var earned = BADGES.filter(function(b){ return state.badges[b.id]; }).length, s = stats();
+  var h = '<div class="stack">' + backBtn('goto-today', 'Back') + '<h1>Milestones</h1>' +
+    '<section class="card"><div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<div class="stack-s" style="flex:1; min-width:160px"><p><strong>' + s.ground + '</strong> calming ' + (s.ground === 1 ? 'practice' : 'practices') + ' in total</p><p><strong>' + s.last7 + '</strong> of the last 7 days with a practice</p>' + (s.run >= 2 ? '<p><strong>' + s.run + '</strong> days running</p>' : '') + '</div></div>' +
+    '<p class="hint">' + earned + ' of ' + BADGES.length + ' milestones reached. A missed day is not a reset; the next practice simply starts the next run.</p></section>';
+  Object.keys(CAT_NAMES).forEach(function(cat){
+    var list = BADGES.filter(function(b){ return b.cat === cat; });
+    h += '<section class="card"><h2>' + CAT_NAMES[cat] + '</h2><div class="badges">' + list.map(function(b){
+      var on = !!state.badges[b.id];
+      return '<div class="badge-tile ' + (on ? 'on' : '') + '"><div class="medal medal-' + cat + '">' + badgeIcon(cat) + '</div><div class="badge-body"><strong>' + esc(b.name) + '</strong><span class="meta">' + (on ? 'Reached ' + esc(fmtDay(dayKey(state.badges[b.id]))) : esc(b.how)) + '</span></div></div>';
+    }).join('') + '</div></section>';
+  });
+  return h + '</div>';
+}
+
 /* ---------- ui state ---------- */
 var ui = {
   tab:'today', sub:{track:'episodes', tools:'calm', plan:'pacing', export:'pdf'},
   panel:null, draftEp:null, draftTh:null, thStep:1, draftGoal:null, goalForm:false, draftGr:null,
   example:false, confirmDel:null, confirmClear:false, summaryText:null,
   planKind:'activity', lesson:null, session:null, hw:null, scrollTop:false, refocus:null,
-  exp:{range:28, pdf:true, csv:true, backup:false, busy:false, links:null}, importMsg:''
+  exp:{range:28, pdf:true, csv:true, backup:false, busy:false, links:null}, importMsg:'',
+  celebrate:[], welcomeBack:false, remindTime:'09:00', remindLinks:null
 };
 var timers = { loop:null, ex:null, wl:null };
 function stopTimers(){
@@ -259,6 +371,14 @@ function courseProgress(){
   });
   return { total: total, done: done, next: next, pct: total ? Math.round(done / total * 100) : 0 };
 }
+function oneThing(ci){
+  var k = dayKey(new Date());
+  if (!practicedToday()) return { title:'One calming practice', why:'Two or three minutes is enough. Practising before symptoms build is when it helps most.', action:'open-tool', attrs:' data-type="breath"', btn:'Start paced breathing' };
+  var cp = courseProgress();
+  if (cp.next) return { title: cp.next.what === 'teach' ? 'Read Session ' + cp.next.s.n : 'Session ' + cp.next.s.n + ' homework', why: cp.next.what === 'teach' ? cp.next.s.title + ', about ' + cp.next.s.minutes + ' minutes.' : cp.next.title + '. A few lines is plenty.', action:'course-open', attrs:' data-n="' + cp.next.s.n + '"' + (cp.next.what === 'hw' ? ' data-day="' + cp.next.day + '"' : ''), btn:'Open' };
+  if (!(state.plan[k] || []).length) return { title:'Plan one activity and one rest', why:'Putting rest in before you need it is the pacing habit.', action:'goto-plan', btn:'Plan my day' };
+  return null;
+}
 function viewToday(){
   var k = dayKey(new Date()), ci = state.checkins[k] || {};
   var MOOD = ['','Very low','Low','Okay','Good','Very good'], ENERGY = ['','Drained','Low','Okay','Good','High'];
@@ -276,11 +396,25 @@ function viewToday(){
   var wkEp = state.episodes.filter(function(e){ return wk.indexOf(dayKey(e.ts)) > -1; }).length;
   var cp = courseProgress();
 
+  var st = stats(), earned = BADGES.filter(function(b){ return state.badges[b.id]; }).length;
   var h = '<div class="stack">';
   h += '<section><p class="eyebrow">' + esc(new Date().toLocaleDateString(undefined, {weekday:'long', month:'long', day:'numeric'})) + '</p><h1>' + greeting() + '</h1></section>';
 
+  if (ui.welcomeBack) {
+    h += '<section class="card card-accent"><h2>Welcome back</h2><p>It has been a few days. That is normal. Picking it up again is the skill, and one small practice today is enough to restart.</p><div class="row"><button type="button" class="btn btn-primary" data-action="open-tool" data-type="breath">Two minutes of breathing</button><button type="button" class="btn btn-quiet" data-action="wb-dismiss">Thanks</button></div></section>';
+  }
+
+  var one = oneThing(ci);
+  if (one) h += '<section class="card"><p class="eyebrow">Today\'s one thing</p><h2>' + esc(one.title) + '</h2><p class="hint">' + esc(one.why) + '</p><div><button type="button" class="btn btn-primary" data-action="' + one.action + '"' + (one.attrs || '') + '>' + esc(one.btn) + '</button></div></section>';
+
   h += '<section class="card"><h2>Quick check-in</h2><p class="hint">Two taps is enough. You don\'t need to track more than this.</p>' +
        scale('mood', 'Mood', MOOD) + scale('energy', 'Energy', ENERGY) + '</section>';
+
+  h += '<section class="card"><div class="item-head"><h2>Your practice</h2><button type="button" class="link" data-action="goto-milestones">Milestones ' + earned + '/' + BADGES.length + '</button></div>' +
+       '<div class="row" style="align-items:center">' + ring(st.last7 / 7, st.last7 + '/7', 'days') +
+       '<div class="stack-s" style="flex:1; min-width:160px"><p>' + (practicedToday() ? 'Practised today. ' : '') + '<strong>' + st.last7 + '</strong> of the last 7 days with a calming practice.</p>' +
+       '<p class="meta">' + st.ground + ' practices in total' + (st.run >= 2 ? ', ' + st.run + ' days running' : '') + '.</p></div></div>' +
+       '<div class="row"><button type="button" class="btn" data-action="open-tool" data-type="breath">Paced breathing</button><button type="button" class="btn btn-quiet" data-action="goto-track" data-sub="episodes">Log an episode</button></div></section>';
 
   h += '<section class="card card-good"><h2>Feeling it build?</h2><p>Slow your body down first. Thoughts can wait a few minutes.</p>' +
        '<div class="row"><button type="button" class="btn btn-primary" data-action="open-tool" data-type="breath">Paced breathing</button>' +
@@ -307,7 +441,11 @@ function viewToday(){
   }
   h += '</section>';
 
-  h += '<section class="card"><h2>This week</h2><p>' + wkMin + ' min of activity, ' + wkCalm + ' grounding ' + (wkCalm === 1 ? 'record' : 'records') + ', ' + wkEp + ' ' + (wkEp === 1 ? 'episode' : 'episodes') + ' logged.</p></section>';
+  var prev = []; for (var pi = 13; pi >= 7; pi--) prev.push(dayKey(addDays(new Date(), -pi)));
+  var prevCalm = state.grounding.filter(function(g){ return prev.indexOf(dayKey(g.ts)) > -1; }).length;
+  var drops = state.grounding.filter(function(g){ return wk.indexOf(dayKey(g.ts)) > -1 && g.before >= 0 && g.after >= 0; }).map(function(g){ return g.before - g.after; });
+  h += '<section class="card"><h2>This week</h2><p>' + wkCalm + ' calming ' + (wkCalm === 1 ? 'practice' : 'practices') + (prevCalm ? ' (' + prevCalm + ' the week before)' : '') + ', ' + wkMin + ' min of activity, ' + wkEp + ' ' + (wkEp === 1 ? 'episode' : 'episodes') + ' logged.</p>' +
+       (drops.length ? '<p class="meta">Stress fell by ' + avg(drops).toFixed(1) + ' points on average after a practice.</p>' : '') + '</section>';
 
   h += '<section class="card card-alert"><h2>When to get urgent help</h2>' +
        '<p>This app supports your care. It does not replace your clinical team. Call 911 or your local emergency number for chest pain, a new weakness on one side of the body, trouble speaking or seeing that is new for you, a severe headache, an injury, or a seizure that does not stop.</p>' +
@@ -325,6 +463,12 @@ function viewToday(){
 /* ---------- SETTINGS ---------- */
 function viewSettings(){
   var h = '<div class="stack">' + backBtn('goto-today', 'Back') + '<h1>Backup and settings</h1>';
+  h += '<section class="card"><h2>Text size</h2><div class="seg" role="group" aria-label="Text size">' + [['normal','Normal'],['large','Large']].map(function(t){ return '<button type="button" aria-selected="' + (state.prefs.textSize === t[0]) + '" data-action="text-size" data-val="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></section>';
+  h += '<section class="card"><h2>Daily reminder</h2><p class="hint">Phones do not let a web app send notifications, so this adds a repeating event to your calendar instead. Pick a time, then choose Calendar from the share sheet.</p>' +
+       '<div class="chips" role="group" aria-label="Reminder time">' + [['09:00','9:00 am'],['12:30','12:30 pm'],['19:00','7:00 pm']].map(function(t){ return '<button type="button" class="chip chip-radio" aria-pressed="' + (ui.remindTime === t[0]) + '" data-action="remind-time" data-val="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
+       '<div class="row"><button type="button" class="btn" data-action="remind-make">Add to my calendar</button></div>' +
+       (ui.remindLinks ? '<div class="row">' + ui.remindLinks.map(function(l){ return '<a class="btn" href="' + l.url + '" download="' + esc(l.name) + '">' + esc(l.name) + '</a>'; }).join('') + '</div>' : '') +
+       '<p class="hint">Or set a repeating alarm in your Clock app named "Steady Ground".</p></section>';
   h += '<section class="card"><h2>Backup</h2><p class="hint">A backup file holds everything in the app. Keep one in your Files app or iCloud Drive. If you get a new phone, restore it here.</p>' +
        '<div class="row"><button type="button" class="btn btn-primary" data-action="backup-share">Save a backup</button></div></section>';
   h += '<section class="card"><h2>Restore</h2><p class="hint">Choose a backup file. This adds its entries to what is already here and skips duplicates.</p>' +
@@ -609,11 +753,15 @@ function panelAfter(p, bodyHtml){
     h += '<p class="lbl">How stressed do you feel now?</p>' + scaleButtons('panel','after',0,10,p.after,true) + '<div class="anchors"><span>0 calm</span><span>10 overwhelmed</span></div>';
   }
   if (p.before >= 0 && p.after >= 0) h += '<p>Stress went from ' + p.before + ' to ' + p.after + '. ' + (p.after < p.before ? 'Your record has been saved.' : 'Your record has been saved. It is still practice, and practice counts.') + '</p>';
+  if (p.saved) {
+    var n = state.grounding.length, l7 = practiceLast7();
+    h += '<div class="feedback"><strong>That is practice number ' + n + '.</strong> ' + l7 + ' of the last 7 days now have a practice.' + '</div><p class="hint">' + esc(p.encourage || (p.encourage = encourage())) + '</p>';
+  }
   return h;
 }
 function saveGrounding(p, minutes){
   if (p.saved) return;
-  p.saved = true;
+  p.saved = true; ui.welcomeBack = false;
   state.grounding.unshift({ id: uid(), ts: Date.now(), skill: TOOL_NAMES[p.type], before: p.before >= 0 ? p.before : -1, after: p.after >= 0 ? p.after : -1, minutes: minutes || 0, note: '' });
   state.grounding.sort(function(a,b){ return b.ts - a.ts; });
   if (minutes >= 1) logActivity({ kind:'calm', minutes:minutes, label:TOOL_NAMES[p.type] });
@@ -1054,12 +1202,19 @@ function doExport(){
   if (!files.length) { e.busy = false; render(); return; }
   var finish = function(msg){ e.busy = false; if (msg) toast(msg); render(); };
   if (navigator.share && navigator.canShare && navigator.canShare({files:files})) {
-    navigator.share({ files:files, title:'Steady Ground report', text:'Steady Ground report, ' + rangeLabel(days) }).then(function(){ finish('Shared'); }, function(err){ finish(err && err.name === 'AbortError' ? '' : 'Sharing did not complete'); });
+    navigator.share({ files:files, title:'Steady Ground report', text:'Steady Ground report, ' + rangeLabel(days) }).then(function(){ state.stats.shares = (state.stats.shares || 0) + 1; save(); finish('Shared'); }, function(err){ finish(err && err.name === 'AbortError' ? '' : 'Sharing did not complete'); });
   } else {
     if (e.links) e.links.forEach(function(l){ try { URL.revokeObjectURL(l.url); } catch(x){} });
     e.links = files.map(function(f){ return { name:f.name, url:URL.createObjectURL(f) }; });
+    state.stats.shares = (state.stats.shares || 0) + 1; save();
     finish('');
   }
+}
+function buildICS(time){
+  var hm = time.split(':'), d = new Date(); d.setHours(+hm[0], +hm[1], 0, 0); if (d < new Date()) d = addDays(d, 1);
+  var start = dayKey(d).replace(/-/g, '') + 'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00';
+  var end = dayKey(d).replace(/-/g, '') + 'T' + pad(d.getHours()) + pad(d.getMinutes() + 5 > 59 ? d.getMinutes() : d.getMinutes() + 5) + '00';
+  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Steady Ground//EN','BEGIN:VEVENT','UID:steady-ground-daily-' + time.replace(':','') + '@local','DTSTAMP:' + start + 'Z','DTSTART:' + start,'DTEND:' + end,'RRULE:FREQ=DAILY','SUMMARY:Steady Ground practice','DESCRIPTION:Two minutes of paced breathing or grounding. Open Steady Ground on your home screen.','BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY','DESCRIPTION:Steady Ground practice','END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
 }
 function importBackup(file){
   var r = new FileReader();
@@ -1093,10 +1248,13 @@ function importBackup(file){
 function render(){
   stopTimers();
   var v = $('#view'), h, tabs = $('#tabs'), header = $('#header');
+  try { document.documentElement.classList.toggle('text-large', state.prefs.textSize === 'large'); } catch(e){}
   if (!state.setup.done) { h = viewWelcome(); if (tabs) tabs.hidden = true; if (header) header.hidden = true; }
   else {
+    checkMilestones();
     if (tabs) tabs.hidden = false; if (header) header.hidden = false;
     if (ui.tab === 'today') h = viewToday();
+    else if (ui.tab === 'milestones') h = viewMilestones();
     else if (ui.tab === 'track') h = viewTrack();
     else if (ui.tab === 'tools') h = viewTools();
     else if (ui.tab === 'course') h = viewCourse();
@@ -1104,6 +1262,7 @@ function render(){
     else if (ui.tab === 'export') h = viewExport();
     else if (ui.tab === 'settings') h = viewSettings();
     else h = viewToday();
+    if (ui.celebrate.length) h += viewCelebration();
   }
   v.innerHTML = h;
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){
@@ -1149,7 +1308,18 @@ var A = {
   'goto-track': function(el){ go('track', {track: el.getAttribute('data-sub') || 'episodes'}); },
   'goto-today': function(){ go('today'); },
   'goto-export': function(){ ui.exp.links = null; go('export'); },
-  'goto-settings': function(){ ui.importMsg = ''; ui.confirmClear = false; go('settings'); },
+  'goto-settings': function(){ ui.importMsg = ''; ui.confirmClear = false; ui.remindLinks = null; go('settings'); },
+  'goto-milestones': function(){ ui.celebrate = []; go('milestones'); },
+  'cel-next': function(){ ui.celebrate.shift(); render(); },
+  'wb-dismiss': function(){ ui.welcomeBack = false; render(); },
+  'text-size': function(el){ state.prefs.textSize = el.getAttribute('data-val'); save(); render(); },
+  'remind-time': function(el){ ui.remindTime = el.getAttribute('data-val'); ui.remindLinks = null; render(); },
+  'remind-make': function(){
+    var f = new File([buildICS(ui.remindTime)], 'steady-ground-reminder.ics', {type:'text/calendar'});
+    if (navigator.share && navigator.canShare && navigator.canShare({files:[f]})) {
+      navigator.share({ files:[f], title:'Steady Ground reminder' }).then(function(){ toast('Choose Calendar to add it'); }, function(){});
+    } else { ui.remindLinks = [{ name:f.name, url:URL.createObjectURL(f) }]; render(); }
+  },
   'welcome-pick': function(el){ ui.welcomeMode = el.getAttribute('data-val'); render(); },
   'welcome-go': function(){
     if (!ui.welcomeMode) return;
@@ -1398,6 +1568,11 @@ document.addEventListener('keydown', function(e){
 });
 window.addEventListener('pagehide', function(){ clearTimeout(saveTimer); save(); });
 
+(function visit(){
+  var now = Date.now();
+  if (state.setup.done && state.lastOpen && now - state.lastOpen > 3 * 86400000) ui.welcomeBack = true;
+  state.lastOpen = now; save();
+})();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   try { navigator.serviceWorker.register('sw.js').catch(function(){}); } catch(e){}
 }
