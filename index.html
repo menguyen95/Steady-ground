@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Steady Ground</title>
 <meta name="description" content="CBT skills, symptom tracking and a self-paced course for functional neurological disorder.">
-<meta name="theme-color" content="#2D6878" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0F171B" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#F7F5F0" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1B2622" media="(prefers-color-scheme: dark)">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -16,22 +16,26 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Source+Serif+4:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <!--APP-->
 <div class="wrap">
   <header class="top" id="header">
-    <svg class="mark" viewBox="0 0 40 40" aria-hidden="true">
-      <rect x="4" y="9" width="32" height="6" rx="3"/>
-      <rect x="8" y="19" width="24" height="6" rx="3" opacity=".6"/>
-      <rect x="12" y="29" width="16" height="6" rx="3" opacity=".35"/>
-    </svg>
-    <div>
-      <div class="brand">Steady Ground</div>
-      <div class="brand-sub">CBT skills for functional neurological disorder</div>
+    <div class="top-left">
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="43" cy="21" r="8.5" fill="#C9856B"/>
+  <path d="M26 50C32 38 44 30 64 32V50Z" fill="#A9C5B3"/>
+  <path d="M0 50C3 34 16 22 34 24C42 25 44 30 42 33C39 37 32 38 30 44C29 47 30 49 31 50Z" fill="#24584F"/>
+  <path d="M27 50C28 45 32 42 37 40C41 38 44 35 46 30" fill="none" stroke="#F7F5F0" stroke-width="3.2" stroke-linecap="round"/></svg>
+      <div>
+        <div class="brand">Steady Ground</div>
+        <div class="brand-sub">Your recovery companion</div>
+      </div>
     </div>
+    <button type="button" class="gear" data-action="goto-me" aria-label="Me: profile and settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>
+    </button>
   </header>
   <main id="view" tabindex="-1"></main>
 </div>
@@ -39,22 +43,16 @@
 <nav class="tabs" id="tabs" aria-label="Main sections">
   <div class="tabs-in">
     <button type="button" class="tab" data-action="tab" data-tab="today">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17h18M6 17a6 6 0 0 1 12 0M12 5v3M4.5 9.5l2 2M19.5 9.5l-2 2"/></svg>Today
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>Home
     </button>
-    <button type="button" class="tab" data-action="tab" data-tab="track">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4h10l3 3v13H6zM9 11h7M9 15h5"/></svg>Track
+    <button type="button" class="tab" data-action="tab" data-tab="path">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19c4-1 5-5 9-6s6-4 7-9M4 19l3-1M20 4l-1 3"/></svg>My Path
     </button>
     <button type="button" class="tab" data-action="tab" data-tab="tools">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><circle cx="12" cy="12" r="8"/></svg>Tools
     </button>
-    <button type="button" class="tab" data-action="tab" data-tab="course">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5C6 4.5 9 4.5 12 6c3-1.5 6-1.5 8-.5V19c-2-1-5-1-8 .5-3-1.5-6-1.5-8-.5zM12 6v13.5"/></svg>Course
-    </button>
     <button type="button" class="tab" data-action="tab" data-tab="progress">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16M7 15l4-5 3 3 5-7"/></svg>Progress
-    </button>
-    <button type="button" class="tab" data-action="tab" data-tab="me">
-      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Me
     </button>
   </div>
 </nav>

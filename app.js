@@ -9,8 +9,9 @@ var canStore = testStore();
 function blank(){
   return { setup:{done:false, mode:''}, episodes:[], grounding:[], thoughts:[], checkins:{}, weeks:{}, goals:[], activity:[], plan:{},
            flare:{signs:'',helps:'',contacts:'',pause:''}, read:{}, course:{answers:{}, done:{}, read:{}},
-           badges:{}, badgesInit:false, prefs:{textSize:'normal'}, stats:{shares:0}, lastOpen:0,
-           feelings:[], profile:{name:'', colour:'teal', vision:'', about:'', team:'', joined:0} };
+           badges:{}, badgesInit:false, prefs:{textSize:'normal', theme:'system', calm:false}, stats:{shares:0}, lastOpen:0, pins:['breath','ground'],
+           feelings:[], profile:{name:'', colour:'teal', vision:'', about:'', team:'', joined:0, presentation:[], difficulties:[], matters:''},
+           fgoals:[], wins:{}, patterns:[] };
 }
 var state = blank();
 function mergeInto(p){
@@ -65,28 +66,15 @@ function cssVar(name){ try { return getComputedStyle(document.documentElement).g
    Non-blocking, auto-removes, and respects reduced-motion (a quiet static tick, no confetti). */
 function fxTick(msg){
   if (msg) toast(msg);
+  if (state.prefs && state.prefs.calm) return;
   try {
     var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     var layer = document.createElement('div'); layer.className = 'fx-layer';
     var check = document.createElement('div'); check.className = 'fx-check';
     check.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
     layer.appendChild(check);
-    if (!reduce) {
-      var cols = [cssVar('--good'), cssVar('--accent'), cssVar('--warn')];
-      for (var i = 0; i < 14; i++) {
-        var b = document.createElement('span'); b.className = 'fx-bit';
-        var ang = Math.random() * Math.PI * 2, dist = 55 + Math.random() * 95;
-        b.style.setProperty('--dx', (Math.cos(ang) * dist).toFixed(0) + 'px');
-        b.style.setProperty('--dy', (Math.sin(ang) * dist).toFixed(0) + 'px');
-        b.style.setProperty('--r', (Math.random() * 360).toFixed(0) + 'deg');
-        b.style.background = cols[i % cols.length];
-        b.style.animationDelay = (Math.random() * 0.1).toFixed(2) + 's';
-        layer.appendChild(b);
-      }
-    }
     document.body.appendChild(layer);
-    try { if (navigator.vibrate) navigator.vibrate(15); } catch(e){}
-    setTimeout(function(){ try { document.body.removeChild(layer); } catch(e){} }, reduce ? 850 : 1150);
+    setTimeout(function(){ try { document.body.removeChild(layer); } catch(e){} }, reduce ? 800 : 1050);
   } catch(e){}
 }
 function logActivity(o){
@@ -258,6 +246,7 @@ function paceDaysMet(){
   state.goals.forEach(function(g){ var d = parseKey(g.since || today); for (var i = 0; i < 400; i++) { var k = dayKey(addDays(d, i)); if (k > today) break; if (goalMins(g, k) >= g.target) n++; } });
   return n;
 }
+function sessionsDoneThrough(n){ var S = sessions(); if (!S.length) return false; for (var i = 1; i <= n; i++) { var s = findSession(i); if (!s) return false; if (!state.course.read[i]) return false; if (!(s.homework || []).every(function(h){ return state.course.done[hwKey(s, h)]; })) return false; } return true; }
 function stats(){
   var cp = courseProgress(), s1 = findSession(1), s1done = false;
   if (s1) s1done = !!state.course.read[1] && (s1.homework || []).every(function(h){ return state.course.done[hwKey(s1, h)]; });
@@ -269,38 +258,48 @@ function stats(){
     weeks: Object.keys(state.weeks).filter(function(k){ var w = state.weeks[k]; return w.functioning != null || w.signs || w.stopped; }).length,
     thoughts: state.thoughts.length, s1done: s1done, coursePct: cp.pct, courseTotal: cp.total,
     moves: state.activity.filter(function(a){ return a.kind === 'move'; }).length, paceDays: paceDaysMet(),
-    flare: !!(f.signs && f.helps), shares: state.stats.shares || 0
+    flare: !!(f.signs && f.helps), shares: state.stats.shares || 0,
+    skills: Object.keys(state.grounding.reduce(function(o,g){ o[g.skill] = 1; return o; }, {})).length,
+    practiceDays: Object.keys(practiceDaySet()).length,
+    tries: allAttempts().length, approached: allAttempts().filter(function(x){ return x.a.result !== 'not'; }).length,
+    goalsDone: state.fgoals.filter(function(g){ return g.done; }).length, returns: state.stats.returns || 0,
+    feelings: state.feelings.length, patterns: state.patterns.length, wins: Object.keys(state.wins).length,
+    phase: sessionsDoneThrough(3) ? (sessionsDoneThrough(7) ? (sessionsDoneThrough(10) ? 3 : 2) : 1) : 0
   };
 }
 var BADGES = [
-  {id:'ground1', cat:'calm', name:'First practice', how:'Complete one calming practice', test:function(s){ return s.ground >= 1; }},
-  {id:'ground10', cat:'calm', name:'Ten practices', how:'Complete 10 calming practices', test:function(s){ return s.ground >= 10; }},
-  {id:'ground25', cat:'calm', name:'Twenty-five practices', how:'Complete 25 calming practices', test:function(s){ return s.ground >= 25; }},
-  {id:'ground50', cat:'calm', name:'Fifty practices', how:'Complete 50 calming practices', test:function(s){ return s.ground >= 50; }},
-  {id:'ground100', cat:'calm', name:'One hundred practices', how:'Complete 100 calming practices', test:function(s){ return s.ground >= 100; }},
+  {id:'ground1', cat:'calm', name:'First calming practice', how:'Use a calming skill once', test:function(s){ return s.ground >= 1; }},
+  {id:'skills3', cat:'calm', name:'Three ways to settle', how:'Use three different calming skills', test:function(s){ return s.skills >= 3; }},
+  {id:'ground10', cat:'calm', name:'Calming, ten times', how:'Practise a calming skill 10 times in total', test:function(s){ return s.ground >= 10; }},
+  {id:'ground25', cat:'calm', name:'Calming, twenty-five times', how:'Practise 25 times in total', test:function(s){ return s.ground >= 25; }},
+  {id:'ground100', cat:'calm', name:'Calming, one hundred times', how:'Practise 100 times in total', test:function(s){ return s.ground >= 100; }},
   {id:'drop3', cat:'calm', name:'Felt the shift', how:'A practice where your stress fell by 3 points or more', test:function(s){ return s.maxDrop >= 3; }},
-  {id:'week5', cat:'calm', name:'Five of seven', how:'Practise on 5 of the last 7 days', test:function(s){ return s.last7 >= 5; }},
-  {id:'run3', cat:'calm', name:'Three days running', how:'Practise three days in a row', test:function(s){ return s.run >= 3; }},
-  {id:'run7', cat:'calm', name:'A week running', how:'Practise seven days in a row', test:function(s){ return s.run >= 7; }},
-  {id:'ep1', cat:'track', name:'First entry', how:'Log your first episode', test:function(s){ return s.episodes >= 1; }},
-  {id:'ep10', cat:'track', name:'Pattern finder', how:'Log 10 episodes, enough to start seeing patterns', test:function(s){ return s.episodes >= 10; }},
-  {id:'check7', cat:'track', name:'Seven check-ins', how:'Do the daily check-in on 7 days', test:function(s){ return s.checkins >= 7; }},
-  {id:'check30', cat:'track', name:'Thirty check-ins', how:'Do the daily check-in on 30 days', test:function(s){ return s.checkins >= 30; }},
-  {id:'week1', cat:'track', name:'Week in review', how:'Fill in a weekly summary', test:function(s){ return s.weeks >= 1; }},
-  {id:'th1', cat:'track', name:'First thought record', how:'Complete a thought record', test:function(s){ return s.thoughts >= 1; }},
-  {id:'th5', cat:'track', name:'Five thought records', how:'Complete 5 thought records', test:function(s){ return s.thoughts >= 5; }},
-  {id:'s1', cat:'course', name:'Session 1 complete', how:'Read Session 1 and finish its homework', test:function(s){ return s.s1done; }},
-  {id:'course25', cat:'course', name:'A quarter of the way', how:'Complete 25% of the course', test:function(s){ return s.courseTotal && s.coursePct >= 25; }},
-  {id:'course50', cat:'course', name:'Halfway there', how:'Complete half the course', test:function(s){ return s.courseTotal && s.coursePct >= 50; }},
-  {id:'course100', cat:'course', name:'Course complete', how:'Finish all ten sessions', test:function(s){ return s.courseTotal && s.coursePct >= 100; }},
-  {id:'move1', cat:'move', name:'First movement', how:'Complete a movement exercise', test:function(s){ return s.moves >= 1; }},
-  {id:'move10', cat:'move', name:'Ten movements', how:'Complete 10 movement exercises', test:function(s){ return s.moves >= 10; }},
+  {id:'days10', cat:'calm', name:'Ten practice days', how:'Practise on 10 different days, in any order', test:function(s){ return s.practiceDays >= 10; }},
+  {id:'days30', cat:'calm', name:'Thirty practice days', how:'Practise on 30 different days, in any order', test:function(s){ return s.practiceDays >= 30; }},
+  {id:'step1', cat:'plan', name:'First real-world step', how:'Try a step toward a goal', test:function(s){ return s.tries >= 1; }},
+  {id:'approach3', cat:'plan', name:'Approached, not avoided', how:'Do all or part of a step three times', test:function(s){ return s.approached >= 3; }},
+  {id:'step10', cat:'plan', name:'Ten tries', how:'Try a goal step 10 times', test:function(s){ return s.tries >= 10; }},
+  {id:'goal1', cat:'plan', name:'Goal reached', how:'Reach a real-world goal', test:function(s){ return s.goalsDone >= 1; }},
   {id:'pace1', cat:'plan', name:'Steady amount met', how:'Meet a pacing target for a day', test:function(s){ return s.paceDays >= 1; }},
   {id:'pace7', cat:'plan', name:'Seven steady days', how:'Meet pacing targets on 7 days', test:function(s){ return s.paceDays >= 7; }},
-  {id:'flare', cat:'plan', name:'Plan in place', how:'Write your flare plan', test:function(s){ return s.flare; }},
-  {id:'share1', cat:'share', name:'Shared with clinic', how:'Share a report with your clinic', test:function(s){ return s.shares >= 1; }}
+  {id:'return1', cat:'plan', name:'Came back', how:'Return after a break of a few days. Coming back is a recovery skill', test:function(s){ return s.returns >= 1; }},
+  {id:'feel1', cat:'track', name:'Named a feeling', how:'Name a feeling, where it sits, and the urge', test:function(s){ return s.feelings >= 1; }},
+  {id:'feel5', cat:'track', name:'Five feelings named', how:'Name five feelings', test:function(s){ return s.feelings >= 5; }},
+  {id:'pattern3', cat:'track', name:'Pattern spotter', how:'Do three pattern checks', test:function(s){ return s.patterns >= 3; }},
+  {id:'th1', cat:'track', name:'First thought record', how:'Work a thought through to a fairer view', test:function(s){ return s.thoughts >= 1; }},
+  {id:'th5', cat:'track', name:'Five thought records', how:'Complete 5 thought records', test:function(s){ return s.thoughts >= 5; }},
+  {id:'wins7', cat:'track', name:'Seven good things', how:'Note what went well on 7 days', test:function(s){ return s.wins >= 7; }},
+  {id:'week1', cat:'track', name:'Week in review', how:'Fill in a weekly summary', test:function(s){ return s.weeks >= 1; }},
+  {id:'s1', cat:'course', name:'Understanding FND', how:'Finish Session 1', test:function(s){ return s.s1done; }},
+  {id:'course33', cat:'course', name:'Phase 1 complete', how:'Finish Sessions 1 to 3: understanding', test:function(s){ return s.phase >= 1; }},
+  {id:'course70', cat:'course', name:'Phase 2 complete', how:'Finish Sessions 4 to 7: active change', test:function(s){ return s.phase >= 2; }},
+  {id:'course100', cat:'course', name:'Ready for independence', how:'Finish all ten sessions', test:function(s){ return s.phase >= 3; }},
+  {id:'move1', cat:'move', name:'First movement practice', how:'Complete a movement exercise', test:function(s){ return s.moves >= 1; }},
+  {id:'move10', cat:'move', name:'Ten movement practices', how:'Complete 10 movement exercises', test:function(s){ return s.moves >= 10; }},
+  {id:'flare', cat:'share', name:'Plan in place', how:'Write your flare plan', test:function(s){ return s.flare; }},
+  {id:'share1', cat:'share', name:'Shared with my team', how:'Share a report with your clinic', test:function(s){ return s.shares >= 1; }}
 ];
-var CAT_NAMES = { calm:'Calming practice', track:'Tracking', course:'Course', move:'Movement', plan:'Planning', share:'Sharing' };
+var CAT_NAMES = { plan:'Real-world steps', calm:'Calming skills', track:'Noticing', course:'Understanding', move:'Movement', share:'Working with your team' };
 var CAT_ICONS = {
   calm:'<path d="M3 12c3-3 6-3 9 0s6 3 9 0M3 17c3-3 6-3 9 0s6 3 9 0M3 7c3-3 6-3 9 0s6 3 9 0"/>',
   track:'<path d="M6 4h10l3 3v13H6zM9 11h7M9 15h5"/>',
@@ -311,12 +310,11 @@ var CAT_ICONS = {
 };
 function badgeIcon(cat){ return '<svg viewBox="0 0 24 24" aria-hidden="true">' + (CAT_ICONS[cat] || CAT_ICONS.calm) + '</svg>'; }
 var ENCOURAGE = [
-  'Every practice teaches your nervous system that it can settle.',
-  'You did the work. That is what changes things over time.',
-  'Showing up on an ordinary day counts just as much.',
-  'Small and regular beats big and rare.',
-  'That is one more piece of evidence that you can influence how you feel.',
-  'Practising while calm makes the skill easier to reach when you need it.'
+  'You took a meaningful step today.',
+  'Each practice teaches your nervous system that it can settle.',
+  'Regular and small does more than rare and large.',
+  'Practising while calm makes the skill easier to reach when you need it.',
+  'This is the work that changes things over time.'
 ];
 function encourage(){ return ENCOURAGE[Math.floor(Math.random() * ENCOURAGE.length)]; }
 function checkMilestones(){
@@ -326,26 +324,47 @@ function checkMilestones(){
     state.badgesInit = true; save(); return;
   }
   BADGES.forEach(function(b){ if (!state.badges[b.id] && b.test(s)) { state.badges[b.id] = Date.now(); fresh.push(b); } });
-  if (fresh.length) { save(); ui.celebrate = ui.celebrate.concat(fresh); try { if (navigator.vibrate) navigator.vibrate(30); } catch(e){} }
+  if (fresh.length) { save(); ui.celebrate = ui.celebrate.concat(fresh); }
 }
 function viewCelebration(){
   var b = ui.celebrate[0];
   return '<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="celTitle"><div class="cel-card">' +
     '<div class="medal medal-' + b.cat + '">' + badgeIcon(b.cat) + '</div>' +
-    '<p class="eyebrow">Milestone</p><h2 id="celTitle">' + esc(b.name) + '</h2><p>' + esc(b.how) + '.</p><p class="hint">' + esc(encourage()) + '</p>' +
-    '<div class="row"><button type="button" class="btn btn-primary" data-action="cel-next">' + (ui.celebrate.length > 1 ? 'Next' : 'Keep going') + '</button><button type="button" class="btn btn-quiet" data-action="goto-milestones">See all milestones</button></div></div></div>';
+    '<p class="eyebrow">Milestone reached</p><h2 id="celTitle">' + esc(b.name) + '</h2><p>' + esc(b.how) + '.</p><p class="hint">' + esc(encourage()) + '</p>' +
+    '<div class="row"><button type="button" class="btn btn-primary" data-action="cel-next">' + (ui.celebrate.length > 1 ? 'Next' : 'Continue') + '</button><button type="button" class="btn btn-quiet" data-action="goto-milestones">See all milestones</button></div></div></div>';
 }
 function ring(pct, label, sub){
   var r = 34, c = 2 * Math.PI * r, off = c * (1 - Math.min(1, pct));
   return '<div class="ring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="ring-bg" cx="40" cy="40" r="' + r + '"/><circle class="ring-fg" cx="40" cy="40" r="' + r + '" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/></svg><div class="ring-txt"><span class="ring-big">' + label + '</span><span class="ring-sub">' + sub + '</span></div></div>';
 }
 function viewProgress(){
-  var h = '<div class="stack"><h1>My progress</h1>' + seg('progress', [['trends','Trends'],['progression','Symptoms'],['milestones','Milestones'],['completed','Done']], ui.sub.progress);
-  if (ui.sub.progress === 'trends') h += viewTrends();
+  var h = '<div class="stack"><h1>My progress</h1>' + seg('progress', [['function','Function'],['progression','Symptoms'],['milestones','Milestones'],['completed','Done']], ui.sub.progress);
+  if (ui.sub.progress === 'function' || ui.sub.progress === 'trends') h += viewFunction();
   else if (ui.sub.progress === 'progression') h += viewProgression();
   else if (ui.sub.progress === 'milestones') h += viewMilestones();
   else h += viewCompleted();
   return h + '</div>';
+}
+function weekList(n){ var weeks = [], d = parseKey(weekKey(new Date())); for (var i = n - 1; i >= 0; i--) weeks.push(dayKey(addDays(d, -7 * i))); return weeks; }
+function inWeekOf(ts, wk){ var k = dayKey(ts); return k >= wk && k < dayKey(addDays(parseKey(wk), 7)); }
+function viewFunction(){
+  var weeks = weekList(8), tries = allAttempts();
+  var tr = weeks.map(function(wk){ return tries.filter(function(x){ return inWeekOf(x.ts, wk); }).length; });
+  var ap = weeks.map(function(wk){ return tries.filter(function(x){ return inWeekOf(x.ts, wk) && x.a.result !== 'not'; }).length; });
+  var pl = weeks.map(function(wk){ var n = 0; for (var i = 0; i < 7; i++) { var k = dayKey(addDays(parseKey(wk), i)); (state.plan[k] || []).forEach(function(it){ if (it.done) n++; }); } return n; });
+  var pr = weeks.map(function(wk){ return state.grounding.filter(function(g){ return inWeekOf(g.ts, wk); }).length; });
+  var fn = weeks.map(function(wk){ var w = state.weeks[wk]; return w && w.functioning != null ? w.functioning : 0; });
+  var stepsDone = 0, stepsAll = 0; state.fgoals.forEach(function(g){ g.steps.forEach(function(st){ stepsAll++; if (st.done) stepsDone++; }); });
+  var h = '<section class="card"><h2>What you are getting back</h2><p>' + (stepsAll ? stepsDone + ' of ' + stepsAll + ' goal steps done across ' + state.fgoals.length + ' ' + (state.fgoals.length === 1 ? 'goal' : 'goals') + ', ' : '') + tries.length + ' real-world ' + (tries.length === 1 ? 'try' : 'tries') + ' in all, ' + Object.keys(state.wins).length + ' days with something that went well.</p>' +
+          (state.fgoals.filter(function(g){ return g.done; }).length ? '<p class="meta">Goals reached: ' + esc(joinList(state.fgoals.filter(function(g){ return g.done; }).map(function(g){ return g.name; }))) + '.</p>' : '') + '</section>';
+  if (!tries.length && !pl.some(function(x){ return x; }) && !pr.some(function(x){ return x; })) return h + '<section class="card empty"><h2>Your progress will show here</h2><p class="hint">Real-world tries, planned activities completed, calming practices and your weekly functioning rating, week by week. Function and participation are what recovery looks like; symptom counts are kept separately.</p><div><button type="button" class="btn" data-action="goto-plan-goals">Set a goal</button></div></section>';
+  h += '<section class="card"><h2>Real-world tries per week</h2><p class="hint">Any try counts; the darker bars are tries where you did all or part of the step.</p>' + chartBars(weeks, tr, Math.max(5, Math.max.apply(null, tr)), 'Goal step tries per week over the last 8 weeks') + '</section>';
+  h += '<section class="card"><h2>Planned activities completed</h2>' + chartBars(weeks, pl, Math.max(5, Math.max.apply(null, pl)), 'Planned activities completed per week') + '</section>';
+  h += '<section class="card"><h2>Calming practices per week</h2>' + chartBars(weeks, pr, Math.max(7, Math.max.apply(null, pr)), 'Calming practices per week') + '</section>';
+  if (fn.some(function(x){ return x > 0; })) h += '<section class="card"><h2>Overall functioning</h2><p class="hint">Your weekly summary rating, 0 to 10.</p>' + chartBars(weeks, fn, 10, 'Weekly functioning rating') + '</section>';
+  var days = lastDays(14), mood = days.map(function(d){ var c = state.checkins[d]; return c && c.mood ? c.mood : null; }), energy = days.map(function(d){ var c = state.checkins[d]; return c && c.energy ? c.energy : null; });
+  if (mood.some(function(x){ return x; }) || energy.some(function(x){ return x; })) h += '<section class="card"><h2>Mood and energy</h2><p class="hint">Last 14 days, 1 is lowest and 5 is highest.</p>' + chartLines(days, mood, energy, 'Mood and energy over the last 14 days') + '<div class="legend"><span><i class="sw sw1"></i>Mood</span><span><i class="sw sw2"></i>Energy</span></div></section>';
+  return h;
 }
 function viewProgression(){
   var weeks = [], d = parseKey(weekKey(new Date()));
@@ -355,11 +374,10 @@ function viewProgression(){
   var sev = weeks.map(function(wk){ var s = state.episodes.filter(function(e){ return inWeek(e.ts, wk) && e.severity; }).map(function(e){ return e.severity; }); return s.length ? +avg(s).toFixed(2) : 0; });
   var pr = weeks.map(function(wk){ return state.grounding.filter(function(g){ return inWeek(g.ts, wk); }).length; });
   var fn = weeks.map(function(wk){ var w = state.weeks[wk]; return w && w.functioning != null ? w.functioning : 0; });
-  if (!state.episodes.length && !state.grounding.length) return '<section class="card empty"><h2>Symptom progression will appear here</h2><p class="hint">Once you have logged episodes across a few weeks, this shows how often they happen, how severe they are, and how much you are practising, week by week.</p></section>';
-  var h = '<section class="card"><h2>Episodes per week</h2><p class="hint">Last 8 weeks, Monday to Sunday.</p>' + chartBars(weeks, eps, Math.max(4, Math.max.apply(null, eps)), 'Episodes per week over the last 8 weeks') + '</section>';
+  var intro = '<section class="card"><p class="hint">Look at this about once a week, not every day. Paying close attention to symptoms tends to turn them up; the Function view is the one that shows recovery.</p></section>';
+  if (!state.episodes.length) return intro + '<section class="card empty"><h2>Symptom progression will appear here</h2><p class="hint">Once you have logged episodes across a few weeks, this shows how often they happen, how severe they are, and how much you are practising, week by week.</p></section>';
+  var h = intro + '<section class="card"><h2>Episodes per week</h2><p class="hint">Last 8 weeks, Monday to Sunday.</p>' + chartBars(weeks, eps, Math.max(4, Math.max.apply(null, eps)), 'Episodes per week over the last 8 weeks') + '</section>';
   h += '<section class="card"><h2>Average severity</h2><p class="hint">1 mild, 2 moderate, 3 severe. Weeks with no episodes show nothing.</p>' + chartBars(weeks, sev, 3, 'Average episode severity per week') + '</section>';
-  h += '<section class="card"><h2>Calming practices per week</h2>' + chartBars(weeks, pr, Math.max(7, Math.max.apply(null, pr)), 'Calming practices per week') + '</section>';
-  if (fn.some(function(x){ return x > 0; })) h += '<section class="card"><h2>Overall functioning</h2><p class="hint">Your weekly summary rating, 0 to 10.</p>' + chartBars(weeks, fn, 10, 'Weekly functioning rating') + '</section>';
   var first = weeks.slice(0,4), last = weeks.slice(4), e1 = first.reduce(function(s,w,i){ return s + eps[i]; }, 0), e2 = last.reduce(function(s,w,i){ return s + eps[i+4]; }, 0);
   var p1 = first.reduce(function(s,w,i){ return s + pr[i]; }, 0), p2 = last.reduce(function(s,w,i){ return s + pr[i+4]; }, 0);
   h += '<section class="card"><h2>Last four weeks against the four before</h2><p>Episodes: ' + e2 + ' (' + e1 + ' before). Practices: ' + p2 + ' (' + p1 + ' before).</p><p class="hint">Symptoms rise and fall. The useful question is whether the practice is building, not whether every week is better than the last.</p></section>';
@@ -374,6 +392,10 @@ function viewCompleted(){
   state.activity.forEach(function(a){ if (a.kind === 'move') ev.push({ ts:a.ts, cat:'move', text:a.label + ', ' + a.minutes + ' min' }); if (a.kind === 'goal') ev.push({ ts:a.ts, cat:'plan', text:'+' + a.minutes + ' min of ' + a.label }); });
   var S = sessions();
   Object.keys(state.course.done).forEach(function(k){ var p = k.split(':'), s = findSession(+p[0]); var hw = s && s.homework.filter(function(h){ return String(h.day) === p[1]; })[0]; ev.push({ ts:state.course.done[k], cat:'course', text:'Session ' + p[0] + ' homework done' + (hw ? ': ' + hwTitle(hw) : '') }); });
+  allAttempts().forEach(function(x){ var st = byId(x.goal.steps, x.a.stepId); ev.push({ ts:x.ts, cat:'plan', text:(x.a.result === 'did' ? 'Did a step: ' : x.a.result === 'part' ? 'Did part of a step: ' : 'Tried a step: ') + (st ? st.text : x.goal.name) }); });
+  state.fgoals.forEach(function(g){ if (g.done && g.doneTs) ev.push({ ts:g.doneTs, cat:'plan', text:'Goal reached: ' + g.name }); });
+  Object.keys(state.wins).forEach(function(k){ ev.push({ ts:parseKey(k).getTime() + 20 * 3600000, cat:'track', text:'Went well: ' + state.wins[k] }); });
+  state.patterns.forEach(function(pt){ ev.push({ ts:pt.ts, cat:'track', text:'Pattern check: ' + joinList(pt.items).toLowerCase() }); });
   BADGES.forEach(function(b){ if (state.badges[b.id]) ev.push({ ts:state.badges[b.id], cat:'share', text:'Milestone: ' + b.name }); });
   ev = ev.filter(function(e){ return e.ts > 0; }).sort(function(a,b){ return b.ts - a.ts; }).slice(0, 150);
   if (!ev.length) return '<section class="card empty"><h2>Completed tasks will appear here</h2><p class="hint">Every practice, log entry, homework and milestone, day by day.</p></section>';
@@ -390,8 +412,8 @@ function viewCompleted(){
 }
 function viewMilestones(){
   var earned = BADGES.filter(function(b){ return state.badges[b.id]; }).length, s = stats();
-  var h = '<section class="card"><div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<div class="stack-s" style="flex:1; min-width:160px"><p><strong>' + s.ground + '</strong> calming ' + (s.ground === 1 ? 'practice' : 'practices') + ' in total</p><p><strong>' + s.last7 + '</strong> of the last 7 days with a practice</p>' + (s.run >= 2 ? '<p><strong>' + s.run + '</strong> days running</p>' : '') + '</div></div>' +
-    '<p class="hint">' + earned + ' of ' + BADGES.length + ' milestones reached. A missed day is not a reset; the next practice simply starts the next run.</p></section>';
+  var h = '<section class="card"><div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<div class="stack-s" style="flex:1; min-width:160px"><p><strong>' + s.ground + '</strong> calming ' + (s.ground === 1 ? 'practice' : 'practices') + ' in total</p><p><strong>' + s.last7 + '</strong> of the last 7 days with a practice</p><p><strong>' + s.practiceDays + '</strong> practice days in all; they add up and never reset</p></div></div>' +
+    '<p class="hint">' + earned + ' of ' + BADGES.length + ' milestones reached. These mark skills and real-world steps, not time spent in the app. Missed days take nothing away.</p></section>';
   Object.keys(CAT_NAMES).forEach(function(cat){
     var list = BADGES.filter(function(b){ return b.cat === cat; });
     h += '<section class="card"><h2>' + CAT_NAMES[cat] + '</h2><div class="badges">' + list.map(function(b){
@@ -403,32 +425,33 @@ function viewMilestones(){
 }
 
 /* ---------- ME (profile) ---------- */
-var COLOURS = { teal:['#2D6878','#6FB6C6'], green:['#3F7350','#8CC79A'], plum:['#6B4C7A','#B99BC9'], rust:['#9A4A2E','#E0956F'], navy:['#2F4A7A','#8FA8D8'] };
-function applyColour(){
+function applyPrefs(){
   try {
-    var c = COLOURS[state.profile.colour] || COLOURS.teal, dark = document.documentElement.getAttribute('data-theme') === 'dark' || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.getAttribute('data-theme') !== 'light');
-    var r = document.documentElement.style;
-    if (state.profile.colour && state.profile.colour !== 'teal') { r.setProperty('--accent', dark ? c[1] : c[0]); r.setProperty('--accent-soft', dark ? c[0] + '55' : c[1] + '55'); }
-    else { r.removeProperty('--accent'); r.removeProperty('--accent-soft'); }
+    var r = document.documentElement, pr = state.prefs || {};
+    if (pr.theme === 'light' || pr.theme === 'dark') r.setAttribute('data-theme', pr.theme); else r.removeAttribute('data-theme');
+    r.classList.toggle('text-large', pr.textSize === 'large'); r.classList.toggle('text-larger', pr.textSize === 'larger'); r.classList.toggle('calm-ui', !!pr.calm);
   } catch(e){}
 }
+function applyColour(){ applyPrefs(); }
+function guided(){ var cp = courseProgress(); return state.setup.mode === 'course' && !(cp.total && !cp.next); }
 function initials(name){ var p = (name || '').trim().split(/\s+/).filter(Boolean); return p.length ? (p[0][0] + (p.length > 1 ? p[p.length-1][0] : '')).toUpperCase() : '•'; }
 function viewMe(){
   var pr = state.profile, s = stats(), earned = BADGES.filter(function(b){ return state.badges[b.id]; }), recent = earned.sort(function(a,b){ return state.badges[b.id] - state.badges[a.id]; }).slice(0,3);
   var vision = pr.vision || state.course.answers.s1d2_4 || '';
   var joined = pr.joined ? fmtDay(dayKey(pr.joined)) : '';
-  var h = '<div class="stack"><h1>Me</h1>';
+  var h = '<div class="stack">' + backBtn('goto-today', 'Back') + '<h1>Me</h1>';
   h += '<section class="card"><div class="row" style="align-items:center"><div class="avatar">' + esc(initials(pr.name)) + '</div><div class="stack-s" style="flex:1; min-width:160px"><h2>' + esc(pr.name || 'Your name') + '</h2><p class="meta">' + (joined ? 'Using Steady Ground since ' + esc(joined) + '. ' : '') + s.ground + ' practices, ' + earned.length + ' milestones.</p></div></div>' +
-       lineField('profile','name','Name or nickname',pr.name,'How you would like to be greeted') +
-       '<div class="field"><span class="lbl">Colour</span><div class="swatches" role="group" aria-label="Accent colour">' + Object.keys(COLOURS).map(function(k){ return '<button type="button" class="swatch" style="background:' + COLOURS[k][0] + '" aria-label="' + k + '" aria-pressed="' + ((pr.colour || 'teal') === k) + '" data-action="colour" data-val="' + k + '"></button>'; }).join('') + '</div></div></section>';
+       lineField('profile','name','Name or nickname',pr.name,'How you would like to be greeted') + '</section>';
+  h += '<section class="card"><h2>How you are using Steady Ground</h2><div class="seg" role="group" aria-label="Mode">' + [['course','Guided treatment'],['tools','Independent use']].map(function(t){ return '<button type="button" aria-selected="' + (state.setup.mode === t[0]) + '" data-action="mode-set" data-val="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div><p class="hint">' + (state.setup.mode === 'course' ? 'Guided: the course, homework and goals stay in view on Home and My Path. Switch to independent use when your programme ends.' : 'Independent: a simpler toolkit with your goals and plans. The course stays available under My Path as a reference.') + '</p></section>';
   h += '<section class="card"><div class="item-head"><h2>My milestones</h2><button type="button" class="link" data-action="goto-milestones">See all ' + earned.length + '/' + BADGES.length + '</button></div>' +
        (recent.length ? '<div class="badges">' + recent.map(function(b){ return '<div class="badge-tile on"><div class="medal medal-' + b.cat + '">' + badgeIcon(b.cat) + '</div><div class="badge-body"><strong>' + esc(b.name) + '</strong><span class="meta">Reached ' + esc(fmtDay(dayKey(state.badges[b.id]))) + '</span></div></div>'; }).join('') + '</div>' : '<p class="hint">Your first milestone is one calming practice away.</p>') +
-       '<div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<p style="flex:1; min-width:160px">' + s.last7 + ' of the last 7 days with a practice' + (s.run >= 2 ? ', ' + s.run + ' days running' : '') + '.</p></div></section>';
+       '<div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<p style="flex:1; min-width:160px">' + s.last7 + ' of the last 7 days with a practice, ' + s.practiceDays + ' practice days in all.</p></div></section>';
+  h += '<section class="card"><h2>My FND</h2><p class="hint">Used to choose which tools come first when you tap "I\'m having symptoms".</p><div class="field"><span class="lbl">How it shows up</span>' + chipGroup('profile','presentation',PRESENTATIONS.map(function(x){ return x[1]; }),pr.presentation) + '</div><div class="field"><span class="lbl">What gets in the way most</span>' + chipGroup('profile','difficulties',DIFFICULTIES,pr.difficulties) + '</div>' + textField('profile','matters','If symptoms got in the way less, I would be',pr.matters,2,'') + '</section>';
   h += '<section class="card"><h2>The version of me I am working toward</h2><p class="hint">From Session 1, Day 2. Read it on a hard day.</p>' + textField('profile','vision','',vision,3,'Someone who has FND but it does not run my life') + '</section>';
   h += '<section class="card"><h2>About me</h2><p class="hint">Anything you want the app, or a clinician reading your report, to know: what your symptoms look like, what helps, what you enjoy.</p>' + textField('profile','about','',pr.about,4,'') + '</section>';
   h += '<section class="card"><h2>My care team</h2><p class="hint">Names and numbers. Also used by your flare plan.</p>' + textField('profile','team','',pr.team || state.flare.contacts,3,'Dr, therapist, physiotherapist, a friend') + '</section>';
   h += '<section class="card"><h2>My plans</h2><div class="row"><button type="button" class="btn" data-action="goto-plan-pacing">Pacing goals</button><button type="button" class="btn" data-action="goto-plan-flare">Flare plan</button><button type="button" class="btn" data-action="goto-plan">Today\'s plan</button></div></section>';
-  h += '<section class="card"><h2>Settings and data</h2><div class="row"><button type="button" class="btn btn-primary" data-action="goto-export">Share with my clinic</button><button type="button" class="btn" data-action="goto-settings">Text size, reminders, backup</button></div></section>';
+  h += '<section class="card"><h2>Your data and privacy</h2><p><strong>What is saved:</strong> everything you enter, on this phone only.</p><p><strong>What is shared:</strong> nothing, until you tap Share with my clinic and choose where it goes.</p><p><strong>Monitoring:</strong> none. No one at the clinic can see what you enter, and the app cannot call anyone for you. In an emergency, call 911 or your local emergency number.</p><div class="row"><button type="button" class="btn btn-primary" data-action="goto-export">Share with my clinic</button><button type="button" class="btn" data-action="goto-settings">Appearance, reminders, backup</button></div></section>';
   return h + '</div>';
 }
 
@@ -439,7 +462,8 @@ var ui = {
   example:false, confirmDel:null, confirmClear:false, summaryText:null,
   planKind:'activity', lesson:null, session:null, hw:null, scrollTop:false, refocus:null,
   exp:{range:28, pdf:true, csv:true, backup:false, busy:false, links:null}, importMsg:'',
-  celebrate:[], welcomeBack:false, remindTime:'09:00', remindLinks:null
+  celebrate:[], welcomeBack:false, remindTime:'09:00', remindLinks:null,
+  setupStep:0, draftSetup:{presentation:[], difficulties:[], matters:'', goal:''}, goalDetail:null, fgoalForm:false, draftFgoal:null, draftAttempt:null, patternSel:[], reflectOpen:false
 };
 var timers = { loop:null, ex:null, wl:null };
 function stopTimers(){
@@ -489,21 +513,173 @@ function lineField(draft, field, label, val, ph, type){
 
 /* ---------- WELCOME (first run) ---------- */
 function viewWelcome(){
-  var m = ui.welcomeMode || '';
-  return '<div class="welcome">' +
-    '<svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><rect x="4" y="9" width="32" height="6" rx="3"/><rect x="8" y="19" width="24" height="6" rx="3" opacity=".6"/><rect x="12" y="29" width="16" height="6" rx="3" opacity=".35"/></svg>' +
-    '<div><p class="eyebrow">Welcome to</p><h1>Steady Ground</h1></div>' +
-    '<p>Skills, tracking and a self-paced course for living with functional neurological disorder. Everything you enter stays on this phone until you choose to share it with your clinic.</p>' +
-    '<div class="stack-s">' +
-    '<button type="button" class="optbtn" aria-pressed="' + (m === 'course') + '" data-action="welcome-pick" data-val="course"><span class="t">Start the first-time course</span><span class="meta">Ten sessions based on the FND psychotherapy workbook, with teaching and daily homework. Go at your own pace.</span></button>' +
-    '<button type="button" class="optbtn" aria-pressed="' + (m === 'tools') + '" data-action="welcome-pick" data-val="tools"><span class="t">Explore the tools first</span><span class="meta">Symptom log, calming skills, pacing and thought records. The course is always there under the Course tab.</span></button>' +
-    '</div>' +
-    '<button type="button" class="btn btn-primary btn-wide" data-action="welcome-go" ' + (m ? '' : 'disabled') + '>Continue</button>' +
-    '<p class="hint">This app supports your care. It does not replace your clinical team. Call 911 or your local emergency number for chest pain, new weakness on one side, new trouble speaking or seeing, a severe headache, an injury, or a seizure that does not stop.</p>' +
-    '</div>';
+  var m = ui.welcomeMode || '', st = ui.setupStep || 0, pr = state.profile, d = ui.draftSetup;
+  var h = '<div class="welcome">';
+  if (st === 0) {
+    return h + '<svg class="mark" style="width:72px;height:72px" viewBox="0 0 64 64" aria-hidden="true"><circle cx="43" cy="21" r="8.5" fill="#C9856B"/><path d="M26 50C32 38 44 30 64 32V50Z" fill="#A9C5B3"/><path d="M0 50C3 34 16 22 34 24C42 25 44 30 42 33C39 37 32 38 30 44C29 47 30 49 31 50Z" fill="#24584F"/><path d="M27 50C28 45 32 42 37 40C41 38 44 35 46 30" fill="none" stroke="#F7F5F0" stroke-width="3.2" stroke-linecap="round"/></svg>' +
+      '<div><p class="eyebrow">Welcome to</p><h1>Steady Ground</h1></div>' +
+      '<p>A recovery companion for functional neurological disorder: help in the moment, small real-world steps, and a course you can take at your own pace. Everything you enter stays on this phone until you choose to share it with your clinic.</p>' +
+      '<div class="stack-s">' +
+      '<button type="button" class="optbtn" aria-pressed="' + (m === 'course') + '" data-action="welcome-pick" data-val="course"><span class="t">Start with the course</span><span class="meta">Ten sessions from the FND psychotherapy workbook, with short teaching and real-world homework.</span></button>' +
+      '<button type="button" class="optbtn" aria-pressed="' + (m === 'tools') + '" data-action="welcome-pick" data-val="tools"><span class="t">Start with what I need today</span><span class="meta">Tools for symptoms, a first real-world goal, and the course whenever you want it.</span></button>' +
+      '</div>' +
+      '<button type="button" class="btn btn-primary btn-wide" data-action="setup-next" ' + (m ? '' : 'disabled') + '>Continue</button>' +
+      '<p class="hint">Everything you enter is saved on this phone only and is not monitored by anyone. This app supports your care. It does not replace your clinical team. Call 911 or your local emergency number for chest pain, new weakness on one side, new trouble speaking or seeing, a severe headache, an injury, or a seizure that does not stop.</p></div>';
+  }
+  h += '<p class="eyebrow">Set-up, step ' + st + ' of 3</p>';
+  if (st === 1) {
+    h += '<h1>How does your FND show up?</h1><p class="hint">Pick everything that applies. The app uses this to choose which tools to offer first. You can change it later under Me.</p>' + chipGroup('setup','presentation',PRESENTATIONS.map(function(p){ return p[1]; }),d.presentation) +
+         '<div class="row"><button type="button" class="btn btn-quiet" data-action="setup-back">Back</button><button type="button" class="btn btn-primary" data-action="setup-next">Next</button></div>';
+  } else if (st === 2) {
+    h += '<h1>What gets in the way most?</h1>' + chipGroup('setup','difficulties',DIFFICULTIES,d.difficulties) +
+         textField('setup','matters','If symptoms got in the way less, what would you be doing?',d.matters,3,'For example: walking to the shops on my own, seeing friends, going back to work two days a week') +
+         '<div class="row"><button type="button" class="btn btn-quiet" data-action="setup-back">Back</button><button type="button" class="btn btn-primary" data-action="setup-next">Next</button></div>';
+  } else {
+    h += '<h1>One real-world goal to start</h1><p class="hint">Something you have been avoiding or want back, small enough to try this week. The app will help you break it into steps. Optional; you can add goals any time.</p>' +
+         lineField('setup','goal','My first goal',d.goal,goalIdeas(d.presentation)[0] || 'Walk to the end of the street') +
+         '<div class="chips">' + goalIdeas(d.presentation).map(function(g){ return '<button type="button" class="chip" data-action="setup-idea" data-val="' + esc(g) + '">' + esc(g) + '</button>'; }).join('') + '</div>' +
+         '<div class="row"><button type="button" class="btn btn-quiet" data-action="setup-back">Back</button><button type="button" class="btn btn-primary" data-action="welcome-go">Finish set-up</button></div>';
+  }
+  return h + '</div>';
+}
+var PRESENTATIONS = [['seizure','Seizure-like episodes'],['movement','Weakness, tremor or walking'],['sensory','Numbness, pain or tingling'],['speech','Speech or swallowing'],['cognitive','Brain fog or memory'],['fatigue','Fatigue'],['dizzy','Dizziness'],['unsure','Not sure or mixed']];
+var DIFFICULTIES = ['Avoiding places or activities','Boom and bust','Checking my symptoms','Worry and dread','Low mood','Sleep','Relationships','Confidence','Work or study'];
+function presKeys(){ var names = state.profile.presentation || []; return PRESENTATIONS.filter(function(p){ return names.indexOf(p[1]) > -1; }).map(function(p){ return p[0]; }); }
+function goalIdeas(presNames){
+  var names = presNames || state.profile.presentation || [], keys = PRESENTATIONS.filter(function(p){ return names.indexOf(p[1]) > -1; }).map(function(p){ return p[0]; });
+  var ideas = [];
+  if (keys.indexOf('movement') > -1 || keys.indexOf('dizzy') > -1) ideas.push('Walk outside on my own for 10 minutes');
+  if (keys.indexOf('seizure') > -1) ideas.push('Go to a cafe with a friend for half an hour');
+  if (keys.indexOf('fatigue') > -1) ideas.push('Cook one simple meal without crashing after');
+  if (keys.indexOf('cognitive') > -1) ideas.push('Read for 15 minutes a day');
+  if (keys.indexOf('speech') > -1) ideas.push('Make one phone call I have been putting off');
+  if (keys.indexOf('sensory') > -1) ideas.push('Take a short bus ride');
+  ideas.push('Meet a friend outside the house', 'Do one shop on my own');
+  return ideas.slice(0, 4);
+}
+function toolkitFor(){
+  var keys = presKeys(), list = [], seen = {};
+  function add(type, why, extra){ var id = type + (extra ? ':' + extra : ''); if (seen[id]) return; seen[id] = 1; list.push({ type:type, why:why, extra:extra }); }
+  keys.forEach(function(k){
+    if (k === 'seizure') { add('ground', 'Bring attention to the room at the first warning sign'); add('breath', 'A longer breath out settles the alarm'); add('feel', 'Name what is building before it builds'); }
+    if (k === 'movement') { add('shift', 'Give your attention a job so the movement can run on its own'); add('move', 'Rhythm walking lets your legs move without being watched', 'walk'); add('breath', 'Slow the body first'); }
+    if (k === 'sensory') { add('ground', 'Senses outward, not inward'); add('scan', 'Notice without fighting the sensation'); add('breath', 'Steady the breath'); }
+    if (k === 'speech') { add('breath', 'A slow breath out before you speak'); add('shift', 'Hum or sing a line; speech often follows'); add('ground', 'Back to the room'); }
+    if (k === 'cognitive') { add('shift', 'One small mental task, then rest'); add('scan', 'Find where the tension sits'); add('pace', 'Fog is often a pacing signal: do less, sooner'); }
+    if (k === 'fatigue') { add('pace', 'Rest before you need it, then a small step'); add('breath', 'Two minutes of slow breathing'); add('move', 'Gentle seated movement keeps the system going', 'march'); }
+    if (k === 'dizzy') { add('ground', 'Press your feet into the floor and name five things'); add('breath', 'Even breathing, in 4 and out 4', '4-4'); add('scan', 'Notice without bracing'); }
+  });
+  if (!list.length) { add('breath', 'Slow the body down first'); add('ground', 'Bring attention back to the room'); add('shift', 'Give your mind a different job'); }
+  return list.slice(0, 4);
+}
+function pinInfo(k){
+  if (k === 'feel') return { label:'Name the feeling', action:'feel-new', attrs:'' };
+  if (k === 'pattern') return { label:'Understand a pattern', action:'goto-pattern', attrs:'' };
+  if (k === 'urges') return { label:'Urges and opposite action', action:'panel', attrs:' data-type="urges"' };
+  if (k.indexOf('move:') === 0) { var x = findEx(k.slice(5)); return x ? { label:x.name, action:'panel', attrs:' data-type="move" data-id="' + x.id + '"' } : null; }
+  if (TOOL_NAMES[k]) return { label:TOOL_NAMES[k], action:'open-tool', attrs:' data-type="' + k + '"' };
+  return null;
+}
+function readAloud(id){
+  try {
+    var el = document.getElementById(id); if (!el || !window.speechSynthesis) { toast('Read aloud is not available on this phone'); return; }
+    if (ui.speaking) { window.speechSynthesis.cancel(); ui.speaking = false; var b0 = $('[data-action="read-aloud"]'); if (b0) b0.textContent = 'Read aloud'; return; }
+    var u = new SpeechSynthesisUtterance(el.textContent.replace(/\s+/g, ' ').trim()); u.rate = 0.95; u.lang = 'en';
+    u.onend = function(){ ui.speaking = false; var b = $('[data-action="read-aloud"]'); if (b) b.textContent = 'Read aloud'; };
+    ui.speaking = true; window.speechSynthesis.cancel(); window.speechSynthesis.speak(u);
+    var b1 = $('[data-action="read-aloud"]'); if (b1) b1.textContent = 'Stop reading';
+  } catch(e){}
+}
+var TOOL_LABELS = { breath:'Paced breathing', ground:'5-4-3-2-1 grounding', shift:'Shift your attention', feel:'Name the feeling', scan:'Body scan', move:'Movement', pace:'Pacing: rest, then a small step' };
+function viewToolkit(){ return '<div class="stack">' + backBtn('goto-today', 'Back') + toolkitBody() + '</div>'; }
+function toolkitBody(){
+  var kit = toolkitFor(), f = state.flare, helps = topCounts(state.episodes, 'helped', 3);
+  var h = '<div><p class="eyebrow">Help right now</p><h2 style="font-size:24px">One thing, two minutes</h2><p class="hint">Chosen for how your FND shows up. Pick whichever feels doable. You can stop at any point.</p></div>';
+  h += '<div class="stack-s">' + kit.map(function(t){
+    var label = t.type === 'move' ? (findEx(t.extra) || {}).name || 'Movement' : TOOL_LABELS[t.type];
+    var action = t.type === 'feel' ? 'feel-new' : t.type === 'pace' ? 'goto-plan-pacing' : t.type === 'move' ? 'panel' : 'open-tool';
+    var attrs = t.type === 'move' ? ' data-type="move" data-id="' + t.extra + '"' : t.type === 'feel' || t.type === 'pace' ? '' : ' data-type="' + t.type + '"' + (t.extra ? ' data-pace="' + t.extra + '"' : '');
+    return '<button type="button" class="tool-btn" data-action="' + action + '"' + attrs + '><span class="t">' + esc(label) + '</span><span class="meta">' + esc(t.why) + '</span></button>';
+  }).join('') + '</div>';
+  if (f.helps || helps.length) h += '<section class="card card-good"><h2>What has helped you before</h2>' + (f.helps ? '<p>' + esc(f.helps) + '</p>' : '') + (helps.length ? '<p class="meta">From your log: ' + esc(joinList(helps.map(function(x){ return x[0].toLowerCase(); }))) + '.</p>' : '') + '</section>';
+  h += '<section class="card"><p class="hint">Afterwards, if you want to, note it in your symptom log. Logging is optional; the tool comes first.</p><div><button type="button" class="btn btn-quiet" data-action="goto-track" data-sub="episodes">Open symptom log</button></div></section>';
+  h += '<section class="card card-alert"><p class="hint">This app is not monitored and cannot call anyone for you. Call 911 for chest pain, new weakness on one side, new trouble speaking or seeing, a severe headache, an injury, or a seizure that does not stop.</p></section>';
+  return h;
 }
 
-/* ---------- TODAY ---------- */
+/* ---------- functional goals (real-world steps) ---------- */
+function currentGoal(){ return state.fgoals.filter(function(g){ return !g.done; })[0] || null; }
+function nextStep(g){ return (g.steps || []).filter(function(s){ return !s.done; })[0] || null; }
+function attemptsIn(g, days){ var set = {}; lastDays(days).forEach(function(d){ set[d] = 1; }); return (g.attempts || []).filter(function(a){ return set[dayKey(a.ts)]; }); }
+function allAttempts(){ var out = []; state.fgoals.forEach(function(g){ (g.attempts || []).forEach(function(a){ out.push({ ts:a.ts, goal:g, a:a }); }); }); return out; }
+function newGoalDraft(){ return { name:'', why:'', steps:['','',''] }; }
+function makeGoal(name, why, steps){ return { id:uid(), name:name, why:why || '', created:Date.now(), done:false, doneTs:0, steps:(steps || []).map(function(t){ return { id:uid(), text:t, done:false }; }), attempts:[] }; }
+function viewGoals(){
+  var h = '';
+  if (ui.goalDetail) { var g = byId(state.fgoals, ui.goalDetail); if (g) return viewGoalDetail(g); ui.goalDetail = null; }
+  h += '<section class="card"><h2>Real-world goals</h2><p class="hint">Things you have been avoiding or want back. Break each into small steps, try a step, and record what happened. Progress here is the point of the whole programme.</p></section>';
+  if (ui.fgoalForm) {
+    var d = ui.draftFgoal;
+    h += '<section class="card"><h2>New goal</h2>' + lineField('fgoal','name','The goal',d.name,'For example: walk to the shops on my own') + textField('fgoal','why','Why it matters to me',d.why,2,'Optional') +
+      '<p class="lbl">Small steps toward it</p><p class="hint">Start with something you could try this week. Three steps is plenty to begin; you can add more later.</p>' +
+      d.steps.map(function(s, i){ return '<input type="text" aria-label="Step ' + (i+1) + '" placeholder="Step ' + (i+1) + (i === 0 ? ': the easiest version' : '') + '" value="' + esc(s) + '" data-draft="fgoal" data-field="step' + i + '">'; }).join('') +
+      '<div class="row"><button type="button" class="btn btn-primary" data-action="fgoal-save">Save goal</button><button type="button" class="btn btn-quiet" data-action="fgoal-cancel">Cancel</button></div></section>';
+  } else {
+    h += '<div><button type="button" class="btn btn-primary" data-action="fgoal-new">Add a goal</button></div>';
+  }
+  state.fgoals.forEach(function(g){
+    var stepsDone = g.steps.filter(function(s){ return s.done; }).length, pct = g.steps.length ? Math.round(stepsDone / g.steps.length * 100) : 0, n7 = attemptsIn(g, 7).length;
+    h += '<button type="button" class="tool-btn" data-action="fgoal-open" data-id="' + g.id + '"><span class="item-head"><span class="t">' + esc(g.name) + '</span>' + (g.done ? '<span class="pill pill-good">Reached</span>' : '') + '</span><span class="bar" aria-hidden="true"><span style="width:' + pct + '%"></span></span><span class="meta">' + stepsDone + ' of ' + g.steps.length + ' steps, ' + n7 + ' ' + (n7 === 1 ? 'try' : 'tries') + ' this week</span></button>';
+  });
+  if (!state.fgoals.length && !ui.fgoalForm) h += '<section class="card"><p class="hint">No goals yet. Ideas for you: ' + esc(goalIdeas().join('; ')) + '.</p></section>';
+  return h;
+}
+function viewGoalDetail(g){
+  var ns = nextStep(g), d = ui.draftAttempt, att = (g.attempts || []).slice().sort(function(a,b){ return b.ts - a.ts; });
+  var h = backBtn('fgoal-close', 'All goals') + '<div><h2>' + esc(g.name) + '</h2>' + (g.why ? '<p class="hint">' + esc(g.why) + '</p>' : '') + '</div>';
+  h += '<section class="card"><h3>Steps</h3><div class="stack-s">' + g.steps.map(function(s){
+    return '<div class="plan-row"><button type="button" class="check" aria-pressed="' + !!s.done + '" aria-label="Step done: ' + esc(s.text) + '" data-action="step-toggle" data-goal="' + g.id + '" data-id="' + s.id + '">' + (s.done ? '✓' : '') + '</button><span class="plan-text">' + esc(s.text) + (ns && ns.id === s.id ? ' <span class="pill">Next</span>' : '') + '</span></div>';
+  }).join('') + '</div><div class="row"><input type="text" id="stepText" placeholder="Add a step" aria-label="New step" style="flex:1; min-width:160px"><button type="button" class="btn" data-action="step-add" data-goal="' + g.id + '">Add</button></div></section>';
+  if (d && d.goalId === g.id) {
+    h += '<section class="card"><h3>What happened?</h3><div class="field"><span class="lbl">Which step?</span>' + radioGroup('attempt','stepId',g.steps.map(function(s){ return s.text; }),(byId(g.steps, d.stepId) || {}).text || '') + '</div>' +
+      '<div class="field"><span class="lbl">How did it go?</span>' + radioGroup('attempt','result',['I did it','I did part of it','I did not manage it today'],d.result) + '</div>' +
+      textField('attempt','note','What did you notice?',d.note,2,'Symptoms, thoughts, what helped. A line is enough.') +
+      '<div class="row"><button type="button" class="btn btn-primary" data-action="attempt-save" data-goal="' + g.id + '">Save</button><button type="button" class="btn btn-quiet" data-action="attempt-cancel">Cancel</button></div></section>';
+  } else if (!g.done) {
+    h += '<section class="card card-accent"><p class="eyebrow">Next step</p><p class="bigtext">' + esc(ns ? ns.text : 'All steps done. Is the goal reached?') + '</p><div class="row">' + (ns ? '<button type="button" class="btn btn-primary" data-action="attempt-new" data-goal="' + g.id + '">I tried it</button>' : '') + '<button type="button" class="btn" data-action="fgoal-reached" data-goal="' + g.id + '">Goal reached</button></div></section>';
+  }
+  if (att.length) h += '<section class="card"><h3>Tries</h3><ul class="list">' + att.slice(0, 20).map(function(a){ var s = byId(g.steps, a.stepId); return '<li class="item"><div class="item-head"><strong>' + esc(s ? s.text : 'Step') + '</strong><span class="pill ' + (a.result === 'did' ? 'pill-good' : a.result === 'part' ? '' : 'pill-warn') + '">' + ({did:'Did it', part:'Part of it', not:'Not today'})[a.result] + '</span></div><div class="meta">' + esc(fmtWhen(a.ts)) + '</div>' + (a.note ? '<div>' + esc(a.note) + '</div>' : '') + '</li>'; }).join('') + '</ul></section>';
+  h += '<div><button type="button" class="link link-danger" data-action="fgoal-del" data-id="' + g.id + '">' + (ui.confirmDel === 'fgoal:' + g.id ? 'Tap again to remove this goal' : 'Remove goal') + '</button></div>';
+  return h;
+}
+
+/* ---------- pattern check (interactive) ---------- */
+var PATTERNS = [
+  ['avoid','I avoided something', 'Avoidance brings relief now and keeps the fear for later. The way through is a smaller version of the thing, not a bigger push.', 'Add it as a step on a goal', 'goto-plan-goals'],
+  ['crash','I pushed through and crashed', 'Boom and bust: a good day spent at full speed, then days lost. The fix is a steady amount you can repeat tomorrow.', 'Check my steady amount', 'goto-plan-pacing'],
+  ['check','I kept checking my symptoms', 'Attention on the symptom turns the volume up. Attention elsewhere lets the system settle.', 'Shift my attention now', 'open-tool:shift'],
+  ['reassure','I looked for reassurance', 'Reassurance eases worry for an hour and feeds it for a week. Try tolerating the not-knowing for a short while instead.', 'Name the feeling under it', 'feel-new'],
+  ['cancel','I cancelled on people', 'Pulling back is understandable and it shrinks the world. One small contact keeps the door open.', 'Message someone today', 'goto-plan'],
+  ['bed','I stayed in bed or on the sofa longer than I meant to', 'Rest you did not plan tends to be a crash, not recovery. Planned rest, then one gentle thing.', 'Plan one activity and one rest', 'goto-plan'],
+  ['none','None of these today', 'Good. Notice what you did instead; that is the pattern worth keeping.', 'Note what went well', 'reflect-open']
+];
+function viewPattern(){
+  var sel = ui.patternSel || [], picked = PATTERNS.filter(function(p){ return sel.indexOf(p[1]) > -1; });
+  var h = '<div class="stack">' + backBtn('goto-today', 'Back') + '<div><p class="eyebrow">Understand a pattern</p><h1>Which of these happened recently?</h1><p class="hint">A one-minute check. Patterns are not failures; they are the things the course teaches you to change.</p></div>';
+  h += '<div class="chips" role="group">' + PATTERNS.map(function(p){ return '<button type="button" class="chip" aria-pressed="' + (sel.indexOf(p[1]) > -1) + '" data-action="pattern-pick" data-val="' + esc(p[1]) + '">' + esc(p[1]) + '</button>'; }).join('') + '</div>';
+  if (picked.length) {
+    h += picked.map(function(p){
+      var act = p[4].split(':'), attrs = act[1] ? ' data-type="' + act[1] + '"' : '';
+      return '<section class="card card-accent"><h2>' + esc(p[1]) + '</h2><p>' + esc(p[2]) + '</p><div><button type="button" class="btn btn-primary" data-action="pattern-go" data-next="' + act[0] + '"' + attrs + '>' + esc(p[3]) + '</button></div></section>';
+    }).join('');
+    h += '<div><button type="button" class="btn btn-quiet" data-action="pattern-save">Save and close</button></div>';
+  }
+  var cp = courseProgress();
+  if (cp.next) h += '<section class="card"><p class="eyebrow">Go deeper</p><p>The course covers each of these in turn. Next for you: Session ' + cp.next.s.n + ', ' + esc(cp.next.s.title) + '.</p><div><button type="button" class="btn" data-action="course-open" data-n="' + cp.next.s.n + '">Open</button></div></section>';
+  return h + '</div>';
+}
+
+/* ---------- TODAY (need-first) ---------- */
 function courseProgress(){
   var S = sessions(), total = 0, done = 0, next = null;
   S.forEach(function(s){
@@ -515,99 +691,85 @@ function courseProgress(){
   });
   return { total: total, done: done, next: next, pct: total ? Math.round(done / total * 100) : 0 };
 }
-function oneThing(ci){
-  var k = dayKey(new Date());
-  if (!practicedToday()) return { title:'One calming practice', why:'Two or three minutes is enough. Practising before symptoms build is when it helps most.', action:'open-tool', attrs:' data-type="breath"', btn:'Start paced breathing' };
-  var cp = courseProgress();
-  if (cp.next) return { title: cp.next.what === 'teach' ? 'Read Session ' + cp.next.s.n : 'Session ' + cp.next.s.n + ' homework', why: cp.next.what === 'teach' ? cp.next.s.title + ', about ' + cp.next.s.minutes + ' minutes.' : cp.next.title + '. A few lines is plenty.', action:'course-open', attrs:' data-n="' + cp.next.s.n + '"' + (cp.next.what === 'hw' ? ' data-day="' + cp.next.day + '"' : ''), btn:'Open' };
-  if (!(state.plan[k] || []).length) return { title:'Plan one activity and one rest', why:'Putting rest in before you need it is the pacing habit.', action:'goto-plan', btn:'Plan my day' };
-  return null;
+function weekFeedback(){
+  var wk = lastDays(7), prev = []; for (var i = 13; i >= 7; i--) prev.push(dayKey(addDays(new Date(), -i)));
+  function inSet(set, ts){ return set.indexOf(dayKey(ts)) > -1; }
+  var tries = allAttempts().filter(function(x){ return inSet(wk, x.ts); }), triesPrev = allAttempts().filter(function(x){ return inSet(prev, x.ts); });
+  var did = tries.filter(function(x){ return x.a.result !== 'not'; }).length;
+  var planned = 0, plannedDone = 0; wk.forEach(function(d){ (state.plan[d] || []).forEach(function(i){ planned++; if (i.done) plannedDone++; }); });
+  var calm = state.grounding.filter(function(g){ return inSet(wk, g.ts); }).length, calmPrev = state.grounding.filter(function(g){ return inSet(prev, g.ts); }).length;
+  var eps = state.episodes.filter(function(e){ return inSet(wk, e.ts); }).length;
+  var lines = [];
+  if (tries.length) lines.push('You tried a real-world step ' + tries.length + ' ' + (tries.length === 1 ? 'time' : 'times') + ' this week' + (did ? ' and managed all or part of it ' + did + ' ' + (did === 1 ? 'time' : 'times') : '') + (eps ? ', despite ' + eps + ' ' + (eps === 1 ? 'episode' : 'episodes') : '') + '.');
+  else if (triesPrev.length) lines.push('No real-world tries yet this week. Last week you made ' + triesPrev.length + '. One small step would restart it.');
+  if (planned) lines.push('You completed ' + plannedDone + ' of ' + planned + ' planned activities.');
+  if (calm) lines.push(calm + ' calming ' + (calm === 1 ? 'practice' : 'practices') + (calmPrev ? ' (' + calmPrev + ' last week)' : '') + '.');
+  var distinct = {}; state.grounding.forEach(function(g){ if (inSet(wk, g.ts)) distinct[g.skill] = 1; });
+  if (Object.keys(distinct).length >= 2) lines.push('You used ' + Object.keys(distinct).length + ' different calming skills.');
+  if (!lines.length) lines.push('Nothing logged yet this week. Whatever you do next counts.');
+  return lines;
 }
 function viewToday(){
-  var k = dayKey(new Date()), ci = state.checkins[k] || {};
+  var k = dayKey(new Date()), ci = state.checkins[k] || {}, g = currentGoal(), ns = g ? nextStep(g) : null, cp = courseProgress(), courseDone = cp.total && !cp.next;
   var MOOD = ['','Very low','Low','Okay','Good','Very good'], ENERGY = ['','Drained','Low','Okay','Good','High'];
   function scale(kind, label, words){
     var cur = ci[kind] || 0, b = '';
-    for (var i = 1; i <= 5; i++) {
-      b += '<button type="button" class="sc" aria-pressed="' + (cur === i) + '" aria-label="' + i + ', ' + words[i] + '" data-action="checkin" data-kind="' + kind + '" data-val="' + i + '">' + i + '</button>';
-    }
+    for (var i = 1; i <= 5; i++) b += '<button type="button" class="sc sc-s" aria-pressed="' + (cur === i) + '" aria-label="' + i + ', ' + words[i] + '" data-action="checkin" data-kind="' + kind + '" data-val="' + i + '">' + i + '</button>';
     return '<div class="field"><div class="lbl-row"><span class="lbl">' + label + '</span><span class="val">' + (cur ? words[cur] : 'Not set') + '</span></div><div class="scale" role="group" aria-label="' + label + '">' + b + '</div></div>';
   }
-  var items = state.plan[k] || [], done = items.filter(function(i){ return i.done; }).length;
-  var wk = lastDays(7);
-  var wkMin = wk.reduce(function(s,d){ return s + minutesOn(d, function(a){ return a.kind !== 'calm'; }); }, 0);
-  var wkCalm = state.grounding.filter(function(g){ return wk.indexOf(dayKey(g.ts)) > -1; }).length;
-  var wkEp = state.episodes.filter(function(e){ return wk.indexOf(dayKey(e.ts)) > -1; }).length;
-  var cp = courseProgress();
-
-  var st = stats(), earned = BADGES.filter(function(b){ return state.badges[b.id]; }).length;
   var h = '<div class="stack">';
   h += '<section><p class="eyebrow">' + esc(new Date().toLocaleDateString(undefined, {weekday:'long', month:'long', day:'numeric'})) + '</p><h1>' + greeting() + '</h1></section>';
+  if (ui.welcomeBack) h += '<section class="card card-accent"><h2>Welcome back</h2><p>It has been a few days. That is normal, and coming back is itself a recovery skill. Nothing has been lost.</p><div class="row"><button type="button" class="btn btn-primary" data-action="goto-toolkit">Something small now</button><button type="button" class="btn btn-quiet" data-action="wb-dismiss">Thanks</button></div></section>';
 
-  if (ui.welcomeBack) {
-    h += '<section class="card card-accent"><h2>Welcome back</h2><p>It has been a few days. That is normal. Picking it up again is the skill, and one small practice today is enough to restart.</p><div class="row"><button type="button" class="btn btn-primary" data-action="open-tool" data-type="breath">Two minutes of breathing</button><button type="button" class="btn btn-quiet" data-action="wb-dismiss">Thanks</button></div></section>';
+  var chev = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
+  h += '<section><p class="eyebrow">Your recovery space</p><h2 style="font-size:24px">What would help you today?</h2></section>' +
+       '<div class="stack-s">' +
+       '<button type="button" class="tool-btn door" data-action="goto-toolkit"><span class="t">I need help right now<span class="meta">A strategy that fits how your FND shows up</span></span>' + chev + '</button>' +
+       '<button type="button" class="tool-btn door door-soft" data-action="quick-two"><span class="t">I have two minutes<span class="meta">Paced breathing, two minutes, then carry on</span></span>' + chev + '</button>' +
+       '<button type="button" class="tool-btn door door-soft" data-action="' + (g ? 'fgoal-open" data-id="' + g.id : 'goto-plan-goals') + '"><span class="t">I want to take a step<span class="meta">' + esc(g ? (ns ? 'Next: ' + ns.text : g.name) : 'Choose a real-world goal and break it into steps') + '</span></span>' + chev + '</button>' +
+       '</div>';
+  var pinned = state.pins.map(function(k){ return pinInfo(k); }).filter(Boolean);
+  if (pinned.length) h += '<section><p class="eyebrow">Your pinned tools</p><div class="chips">' + pinned.map(function(t){ return '<button type="button" class="chip" data-action="' + t.action + '"' + t.attrs + '>' + esc(t.label) + '</button>'; }).join('') + '</div></section>';
+  h += '<section class="card"><div class="item-head"><h2>Reflect on my day</h2>' + (!ui.reflectOpen ? '<button type="button" class="link" data-action="reflect-open">' + (state.wins[k] ? 'Edit' : 'Open') + '</button>' : '') + '</div>' + (!ui.reflectOpen ? '<p class="hint">' + (state.wins[k] ? 'Went well: ' + esc(state.wins[k]) : 'Two taps and one thing that went well.') + '</p></section>' : '');
+  if (ui.reflectOpen) {
+    h += '<div class="item-head"><span></span><button type="button" class="link" data-action="reflect-close">Close</button></div>' + scale('mood', 'Mood', MOOD) + scale('energy', 'Energy', ENERGY) +
+         '<div class="field"><label class="lbl" for="winText">One thing that went well, however small</label><input type="text" id="winText" value="' + esc(state.wins[k] || '') + '" placeholder="I went outside. I rested before I needed to. I asked for help." autocomplete="off"></div><div><button type="button" class="btn btn-primary" data-action="win-save">Save</button></div></section>';
   }
 
-  var one = oneThing(ci);
-  if (one) h += '<section class="card"><p class="eyebrow">Today\'s one thing</p><h2>' + esc(one.title) + '</h2><p class="hint">' + esc(one.why) + '</p><div><button type="button" class="btn btn-primary" data-action="' + one.action + '"' + (one.attrs || '') + '>' + esc(one.btn) + '</button></div></section>';
-
-  h += '<section class="card"><h2>Quick check-in</h2><p class="hint">Two taps is enough. You don\'t need to track more than this.</p>' +
-       scale('mood', 'Mood', MOOD) + scale('energy', 'Energy', ENERGY) + '</section>';
-
-  h += '<section class="card"><div class="item-head"><h2>Your practice</h2><button type="button" class="link" data-action="goto-milestones">Milestones ' + earned + '/' + BADGES.length + '</button></div>' +
-       '<div class="row" style="align-items:center">' + ring(st.last7 / 7, st.last7 + '/7', 'days') +
-       '<div class="stack-s" style="flex:1; min-width:160px"><p>' + (practicedToday() ? 'Practised today. ' : '') + '<strong>' + st.last7 + '</strong> of the last 7 days with a calming practice.</p>' +
-       '<p class="meta">' + st.ground + ' practices in total' + (st.run >= 2 ? ', ' + st.run + ' days running' : '') + '.</p></div></div>' +
-       '<div class="row"><button type="button" class="btn" data-action="open-tool" data-type="breath">Paced breathing</button><button type="button" class="btn btn-quiet" data-action="goto-track" data-sub="episodes">Log an episode</button></div></section>';
-
-  h += '<section class="card card-good"><h2>Feeling it build?</h2><p>Slow your body down first. Thoughts can wait a few minutes.</p>' +
-       '<div class="row"><button type="button" class="btn btn-primary" data-action="open-tool" data-type="breath">Paced breathing</button>' +
-       '<button type="button" class="btn" data-action="open-tool" data-type="ground">Ground with 5-4-3-2-1</button></div></section>';
-
-  if (sessions().length) {
-    h += '<section class="card"><div class="item-head"><h2>Course</h2><span class="val">' + cp.pct + '%</span></div><div class="bar" aria-hidden="true"><span style="width:' + cp.pct + '%"></span></div>';
-    if (cp.next) {
-      h += '<p>Next: <strong>Session ' + cp.next.s.n + '</strong>, ' + (cp.next.what === 'teach' ? 'read the session' : esc(cp.next.title)) + '.</p>' +
-           '<div><button type="button" class="btn btn-primary" data-action="course-open" data-n="' + cp.next.s.n + '"' + (cp.next.what === 'hw' ? ' data-day="' + cp.next.day + '"' : '') + '>Continue</button></div>';
-    } else {
-      h += '<p>You have completed the course. Your maintenance plan is in Session 10.</p><div><button type="button" class="btn" data-action="course-open" data-n="10">Open my plan</button></div>';
-    }
-    h += '</section>';
+  if (g) {
+    var n7 = attemptsIn(g, 7).length, stepsDone = g.steps.filter(function(s){ return s.done; }).length;
+    h += '<section class="card"><p class="eyebrow">Your current goal</p><h2>' + esc(g.name) + '</h2><div class="bar" aria-hidden="true"><span style="width:' + (g.steps.length ? Math.round(stepsDone / g.steps.length * 100) : 0) + '%"></span></div>' +
+         '<p class="meta">' + stepsDone + ' of ' + g.steps.length + ' steps done. ' + (n7 ? 'You have worked on this ' + n7 + ' ' + (n7 === 1 ? 'time' : 'times') + ' this week.' : 'Not tried yet this week.') + '</p>' +
+         (ns ? '<p><strong>Next step:</strong> ' + esc(ns.text) + '</p><div class="row"><button type="button" class="btn btn-primary" data-action="attempt-new" data-goal="' + g.id + '">I tried it</button><button type="button" class="btn btn-quiet" data-action="fgoal-open" data-id="' + g.id + '">Open goal</button></div>' : '<div><button type="button" class="btn" data-action="fgoal-open" data-id="' + g.id + '">Open goal</button></div>') + '</section>';
   }
 
-  h += '<section class="card"><div class="item-head"><h2>Today\'s plan</h2>' + (items.length ? '<span class="val">' + done + ' of ' + items.length + ' done</span>' : '') + '</div>';
-  if (!items.length) {
-    h += '<p class="hint">Nothing planned yet. One gentle activity and one rest is a good start.</p><div><button type="button" class="btn" data-action="goto-plan">Plan my day</button></div>';
-  } else {
-    h += '<div class="stack-s">' + items.slice(0,5).map(function(i){
+  h += '<section class="card"><h2>This week</h2>' + weekFeedback().map(function(l){ return '<p>' + esc(l) + '</p>'; }).join('') + '<div><button type="button" class="link" data-action="goto-progress">See my progress</button></div></section>';
+
+  var items = state.plan[k] || [], done = items.filter(function(i){ return i.done; }).length;
+  if (items.length) {
+    h += '<section class="card"><div class="item-head"><h2>Today\'s plan</h2><span class="val">' + done + ' of ' + items.length + ' done</span></div><div class="stack-s">' + items.slice(0,5).map(function(i){
       return '<div class="plan-row"><button type="button" class="check" aria-pressed="' + !!i.done + '" aria-label="Mark done: ' + esc(i.text) + '" data-action="plan-toggle" data-id="' + i.id + '">' + (i.done ? '✓' : '') + '</button><span class="plan-text">' + esc(i.text) + '</span></div>';
-    }).join('') + '</div><div><button type="button" class="btn btn-quiet" data-action="goto-plan">Open plan</button></div>';
+    }).join('') + '</div><div><button type="button" class="btn btn-quiet" data-action="goto-plan">Open plan</button></div></section>';
   }
-  h += '</section>';
 
-  var prev = []; for (var pi = 13; pi >= 7; pi--) prev.push(dayKey(addDays(new Date(), -pi)));
-  var prevCalm = state.grounding.filter(function(g){ return prev.indexOf(dayKey(g.ts)) > -1; }).length;
-  var drops = state.grounding.filter(function(g){ return wk.indexOf(dayKey(g.ts)) > -1 && g.before >= 0 && g.after >= 0; }).map(function(g){ return g.before - g.after; });
-  h += '<section class="card"><h2>This week</h2><p>' + wkCalm + ' calming ' + (wkCalm === 1 ? 'practice' : 'practices') + (prevCalm ? ' (' + prevCalm + ' the week before)' : '') + ', ' + wkMin + ' min of activity, ' + wkEp + ' ' + (wkEp === 1 ? 'episode' : 'episodes') + ' logged.</p>' +
-       (drops.length ? '<p class="meta">Stress fell by ' + avg(drops).toFixed(1) + ' points on average after a practice.</p>' : '') + '</section>';
+  if (sessions().length && guided()) {
+    if (courseDone) h += '<section class="card"><p class="eyebrow">Maintenance</p><p>You have finished the course. Check your maintenance plan once a week, and use the toolkit when you need it. Using the app less is a good sign.</p><div><button type="button" class="btn" data-action="course-open" data-n="10">My maintenance plan</button></div></section>';
+    else h += '<section class="card"><div class="item-head"><h2>Course</h2><span class="val">' + cp.pct + '%</span></div><div class="bar" aria-hidden="true"><span style="width:' + cp.pct + '%"></span></div><p class="meta">Next: Session ' + cp.next.s.n + ', ' + (cp.next.what === 'teach' ? 'read the session' : esc(cp.next.title)) + '.</p><div><button type="button" class="btn" data-action="course-open" data-n="' + cp.next.s.n + '"' + (cp.next.what === 'hw' ? ' data-day="' + cp.next.day + '"' : '') + '>Continue</button></div></section>';
+  }
 
   h += '<section class="card card-alert"><h2>When to get urgent help</h2>' +
-       '<p>This app supports your care. It does not replace your clinical team. Call 911 or your local emergency number for chest pain, a new weakness on one side of the body, trouble speaking or seeing that is new for you, a severe headache, an injury, or a seizure that does not stop.</p>' +
+       '<p>This app supports your care and is not monitored by anyone. Call 911 or your local emergency number for chest pain, a new weakness on one side of the body, trouble speaking or seeing that is new for you, a severe headache, an injury, or a seizure that does not stop.</p>' +
        '<p>If you are thinking about harming yourself, call or text 9-8-8 in Canada, or contact your local crisis line.</p></section>';
-
-  h += '<section class="card"><h2>Your data</h2>';
-  h += canStore ? '<p class="hint">Entries are saved on this phone only. Nothing is sent anywhere unless you share it. Sharing a report with your clinic also makes a backup.</p>'
-                : '<p class="hint">This browser is not saving entries, so they will be lost when you close this page. Share a report before you leave.</p>';
-  h += '<div class="row"><button type="button" class="btn btn-primary" data-action="goto-export">Share with my clinic</button><button type="button" class="btn" data-action="goto-settings">Backup and settings</button></div>';
-  h += '</section>';
-  h += '</div>';
-  return h;
+  if (!canStore) h += '<section class="card"><p class="hint">This browser is not saving entries, so they will be lost when you close this page. Share a report before you leave.</p></section>';
+  return h + '</div>';
 }
 
 /* ---------- SETTINGS ---------- */
 function viewSettings(){
   var h = '<div class="stack">' + backBtn('goto-today', 'Back') + '<h1>Backup and settings</h1>';
-  h += '<section class="card"><h2>Text size</h2><div class="seg" role="group" aria-label="Text size">' + [['normal','Normal'],['large','Large']].map(function(t){ return '<button type="button" aria-selected="' + (state.prefs.textSize === t[0]) + '" data-action="text-size" data-val="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></section>';
+  h += '<section class="card"><h2>Appearance</h2><div class="field"><span class="lbl">Theme</span><div class="seg" role="group" aria-label="Theme">' + [['system','Match phone'],['light','Light'],['dark','Dark']].map(function(t){ return '<button type="button" aria-selected="' + ((state.prefs.theme || 'system') === t[0]) + '" data-action="pref-set" data-key="theme" data-val="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
+       '<div class="field"><span class="lbl">Text size</span><div class="seg" role="group" aria-label="Text size">' + [['normal','Normal'],['large','Large'],['larger','Largest']].map(function(t){ return '<button type="button" aria-selected="' + (state.prefs.textSize === t[0]) + '" data-action="pref-set" data-key="textSize" data-val="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div></div>' +
+       '<div class="plan-row"><button type="button" class="check" aria-pressed="' + !!state.prefs.calm + '" aria-label="Reduce visual stimulation" data-action="pref-toggle" data-key="calm">' + (state.prefs.calm ? '\u2713' : '') + '</button><span class="plan-text">Reduce visual stimulation<br><span class="meta">No animations or completion marks; the breathing circle still moves, slowly.</span></span></div></section>';
   h += '<section class="card"><h2>Daily reminder</h2><p class="hint">Phones do not let a web app send notifications, so this adds a repeating event to your calendar instead. Pick a time, then choose Calendar from the share sheet.</p>' +
        '<div class="chips" role="group" aria-label="Reminder time">' + [['09:00','9:00 am'],['12:30','12:30 pm'],['19:00','7:00 pm']].map(function(t){ return '<button type="button" class="chip chip-radio" aria-pressed="' + (ui.remindTime === t[0]) + '" data-action="remind-time" data-val="' + t[0] + '">' + t[1] + '</button>'; }).join('') + '</div>' +
        '<div class="row"><button type="button" class="btn" data-action="remind-make">Add to my calendar</button></div>' +
@@ -891,23 +1053,25 @@ function viewTools(){
     if (p.type === 'urges') return panelUrges(p);
     if (p.type === 'feel') return panelFeel(p);
   }
-  var h = '<div class="stack"><h1>Tools</h1>' + seg('tools', [['calm','Calm'],['feel','Feel'],['move','Move']], ui.sub.tools);
+  var h = '<div class="stack"><h1>Tools</h1>' + seg('tools', [['now','Now'],['calm','Calm'],['feel','Feel'],['move','Move'],['log','Log']], ui.sub.tools);
+  function toolRow(action, attrs, key, title, meta){ return '<div class="tool-row"><button type="button" class="tool-btn" data-action="' + action + '"' + attrs + '><span class="t">' + esc(title) + '</span><span class="meta">' + esc(meta) + '</span></button><button type="button" class="pin" aria-pressed="' + (state.pins.indexOf(key) > -1) + '" aria-label="' + (state.pins.indexOf(key) > -1 ? 'Unpin from Home: ' : 'Pin to Home: ') + esc(title) + '" data-action="pin-toggle" data-key="' + key + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3zM12 15v5"/></svg></button></div>'; }
+  if (ui.sub.tools === 'now') { h += toolkitBody(); return h + '</div>'; }
+  if (ui.sub.tools === 'log') { h += '<p class="hint">Logging is here when you want it. It helps you and your clinician spot patterns; it is not something to do every hour.</p>' + viewTrack().replace('<h1>Track</h1>', ''); return h + '</div>'; }
   if (ui.sub.tools === 'feel') {
-    h += '<section class="card"><p>Feelings show up in the body first. Naming the feeling, where it sits, and what it pushes you to do gives you a choice about what happens next. This follows the emotion wheels used in Session 3.</p></section>' +
-         '<button type="button" class="tool-btn" data-action="feel-new"><span class="t">Name the feeling</span><span class="meta">Core feeling, body sensations, the urge, and what would help. About two minutes.</span></button>' +
-         '<button type="button" class="tool-btn" data-action="panel" data-type="scan"><span class="t">Body scan</span><span class="meta">Seven slow stops from feet to face, noticing without changing</span></button>' +
-         '<button type="button" class="tool-btn" data-action="panel" data-type="urges"><span class="t">Urges and opposite action</span><span class="meta">What each feeling pushes you to do, and what helps instead</span></button>';
+    h += '<section class="card"><p>Feelings show up in the body first. Naming the feeling, where it sits, and what it pushes you to do gives you a choice about what happens next.</p></section>' +
+         toolRow('feel-new', '', 'feel', 'Name the feeling', 'Core feeling, body sensations, the urge, and what would help. About two minutes.') +
+         toolRow('panel', ' data-type="scan"', 'scan', 'Body scan', 'Seven slow stops from feet to face, noticing without changing') +
+         toolRow('panel', ' data-type="urges"', 'urges', 'Urges and opposite action', 'What each feeling pushes you to do, and what helps instead') +
+         toolRow('goto-pattern', '', 'pattern', 'Understand a pattern', 'A one-minute check, then one thing to try');
   } else if (ui.sub.tools === 'calm') {
-    h += '<button type="button" class="tool-btn" data-action="panel" data-type="breath"><span class="t">Paced breathing</span><span class="meta">A gentle pacer with a longer breath out</span></button>' +
-         '<button type="button" class="tool-btn" data-action="panel" data-type="ground"><span class="t">5-4-3-2-1 sensory grounding</span><span class="meta">Bring your attention back to the room, one sense at a time</span></button>' +
-         '<button type="button" class="tool-btn" data-action="panel" data-type="pmr"><span class="t">Progressive muscle relaxation</span><span class="meta">Tense and release, one muscle group at a time</span></button>' +
-         '<button type="button" class="tool-btn" data-action="panel" data-type="shift"><span class="t">Shift your attention</span><span class="meta">Give your mind a different job for a few minutes</span></button>' +
-         '<p class="hint">Each calming tool asks for your stress level before and after, and saves it to your grounding activity record.</p>';
+    h += toolRow('panel', ' data-type="breath"', 'breath', 'Paced breathing', 'A gentle pacer with a longer breath out') +
+         toolRow('panel', ' data-type="ground"', 'ground', '5-4-3-2-1 sensory grounding', 'Bring your attention back to the room, one sense at a time') +
+         toolRow('panel', ' data-type="pmr"', 'pmr', 'Progressive muscle relaxation', 'Tense and release, one muscle group at a time') +
+         toolRow('panel', ' data-type="shift"', 'shift', 'Shift your attention', 'Give your mind a different job for a few minutes') +
+         '<p class="hint">Each calming tool asks for your stress level before and after and saves it to your grounding record. You can stop any exercise at any point; what you did still counts. Pin the ones you use most to Home.</p>';
   } else {
     h += '<section class="card"><p>Gentle movements to practise smooth, automatic movement. Do any exercises your physiotherapist has given you first. Stop if you feel sharp pain, chest pain or faint.</p></section>' +
-         '<div class="stack-s">' + EXERCISES.map(function(x){
-           return '<button type="button" class="tool-btn" data-action="panel" data-type="move" data-id="' + x.id + '"><span class="t">' + esc(x.name) + '</span><span class="meta">' + esc(x.dose) + (x.standing ? ', standing' : ', seated') + '</span></button>';
-         }).join('') + '</div>';
+         '<div class="stack-s">' + EXERCISES.map(function(x){ return toolRow('panel', ' data-type="move" data-id="' + x.id + '"', 'move:' + x.id, x.name, x.dose + (x.standing ? ', standing' : ', seated')); }).join('') + '</div>';
   }
   return h + '</div>';
 }
@@ -932,7 +1096,7 @@ function panelAfter(p, bodyHtml){
 }
 function saveGrounding(p, minutes){
   if (p.saved) return;
-  p.saved = true; ui.welcomeBack = false;
+  p.saved = true; if (ui.welcomeBack) { state.stats.returns = (state.stats.returns || 0) + 1; ui.welcomeBack = false; }
   state.grounding.unshift({ id: uid(), ts: Date.now(), skill: TOOL_NAMES[p.type], before: p.before >= 0 ? p.before : -1, after: p.after >= 0 ? p.after : -1, minutes: minutes || 0, note: '' });
   state.grounding.sort(function(a,b){ return b.ts - a.ts; });
   if (minutes >= 1) logActivity({ kind:'calm', minutes:minutes, label:TOOL_NAMES[p.type] });
@@ -1114,10 +1278,12 @@ function viewCourse(){
   if (!S.length) return h + '<section class="card"><p class="hint">Course content is not loaded.</p></section></div>';
   h += '<section class="card"><p>Ten sessions from the FND psychotherapy workbook, adapted for working on your own. Read the session, then do the homework over the following days. There is no deadline.</p>' +
        '<div class="bar" aria-hidden="true"><span style="width:' + cp.pct + '%"></span></div><p class="meta">' + cp.done + ' of ' + cp.total + ' parts complete</p></section>';
+  var PH = { 1:'Phase 1: Understanding and engagement', 4:'Phase 2: Active change', 8:'Phase 3: Independence and relapse prevention' };
   h += '<div class="stack-s">' + S.map(function(s){
+    var phase = PH[s.n] ? '<p class="eyebrow" style="margin-top:6px">' + PH[s.n] + '</p>' : '';
     var hwN = (s.homework || []).length, hwDone = (s.homework || []).filter(function(x){ return state.course.done[hwKey(s, x)]; }).length;
     var read = !!state.course.read[s.n], all = read && hwDone === hwN;
-    return '<button type="button" class="tool-btn" data-action="course-open" data-n="' + s.n + '"><span class="sess"><span class="sess-n ' + (all ? 'done' : '') + '">' + (all ? '✓' : s.n) + '</span><span class="sess-body"><span class="t">' + esc(s.title) + '</span><span class="meta">' + esc(s.tagline || '') + '</span><span class="meta">' + (read ? 'Read' : s.minutes + ' min read') + ' · homework ' + hwDone + ' of ' + hwN + '</span></span></span></button>';
+    return phase + '<button type="button" class="tool-btn" data-action="course-open" data-n="' + s.n + '"><span class="sess"><span class="sess-n ' + (all ? 'done' : '') + '">' + (all ? '✓' : s.n) + '</span><span class="sess-body"><span class="t">' + esc(s.title) + '</span><span class="meta">' + esc(s.tagline || '') + '</span><span class="meta">' + (read ? 'Read' : s.minutes + ' min read') + ' · homework ' + hwDone + ' of ' + hwN + '</span></span></span></button>';
   }).join('') + '</div>';
   h += '<h2>Quick reads</h2><div class="stack-s">' + LESSONS.map(function(l){
     return '<button type="button" class="tool-btn" data-action="lesson-open" data-id="' + l.id + '"><span class="item-head"><span class="t">' + esc(l.title) + '</span>' + (state.read[l.id] ? '<span class="pill pill-good">Read</span>' : '<span class="meta">' + l.mins + ' min</span>') + '</span><span class="meta">' + esc(l.sum) + '</span></button>';
@@ -1128,13 +1294,14 @@ function viewCourse(){
 function viewSession(s){
   var read = !!state.course.read[s.n], h = '<div class="stack">' + backBtn('course-close', 'All sessions');
   h += '<div><p class="eyebrow">Session ' + s.n + ' of ' + sessions().length + '</p><h1>' + esc(s.title) + '</h1><p class="meta">About ' + s.minutes + ' min to read</p></div>';
-  h += '<section class="card"><div class="prose">' + (s.teach || []).map(function(b){
+  var blocks = (s.teach || []), full = ui.fullTeach || read || blocks.length <= 2, shown = full ? blocks : blocks.slice(0, 1);
+  h += '<section class="card"><div class="row"><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="teachText">Read aloud</button></div><div class="prose" id="teachText">' + shown.map(function(b){
     if (b.quote) return '<blockquote>' + esc(b.quote) + '</blockquote>';
     var o = b.h ? '<h2>' + esc(b.h) + '</h2>' : '';
     o += (b.p || []).map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('');
     if (b.bullets && b.bullets.length) o += '<ul>' + b.bullets.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
     return o;
-  }).join('') + '</div>' +
+  }).join('') + '</div>' + (full ? '' : '<div><button type="button" class="btn" data-action="teach-full">Read the full session (' + (blocks.length - 1) + ' more parts)</button></div>') +
   '<div><button type="button" class="btn ' + (read ? 'btn-quiet' : 'btn-primary') + '" data-action="session-read" data-n="' + s.n + '">' + (read ? 'Marked as read' : 'Mark as read') + '</button></div></section>';
   if (s.practice) h += '<section class="card card-accent"><p class="eyebrow">Practise this week</p><p>' + esc(s.practice) + '</p><div class="row"><button type="button" class="btn" data-action="goto-tools">Open the tools</button></div></section>';
   if (s.tracking) h += '<section class="card"><p class="eyebrow">Tracking for this session</p><p>The workbook\'s daily symptom log, grounding activity record and weekly summary are live trackers in this app, so you fill them in once and they build up over time.</p><div class="row"><button type="button" class="btn" data-action="goto-track" data-sub="episodes">Symptom log</button><button type="button" class="btn" data-action="goto-track" data-sub="grounding">Grounding record</button></div></section>';
@@ -1180,8 +1347,21 @@ function viewLesson(){
   if (!l) { ui.lesson = null; return viewCourse(); }
   var read = !!state.read[l.id];
   return '<div class="stack">' + backBtn('lesson-close', 'Course') + '<h1>' + esc(l.title) + '</h1>' +
-    '<section class="card"><div class="prose">' + l.body.map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('') + '</div></section>' +
+    '<section class="card"><div class="row"><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="lessonText">Read aloud</button></div><div class="prose" id="lessonText">' + l.body.map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('') + '</div></section>' +
     '<div class="row"><button type="button" class="btn ' + (read ? 'btn-quiet' : 'btn-primary') + '" data-action="lesson-read" data-id="' + l.id + '">' + (read ? 'Marked as read' : 'Mark as read') + '</button></div></div>';
+}
+
+/* ---------- MY PATH ---------- */
+function viewPath(){
+  var g = guided(), cur = ui.sub.path || (g ? 'course' : 'goals');
+  var segs = g ? [['course','Course'],['goals','Goals'],['pacing','Pacing'],['daily','Today'],['flare','Flare plan']] : [['goals','Goals'],['pacing','Pacing'],['daily','Today'],['flare','Flare plan'],['course','Course']];
+  var h = '<div class="stack"><h1>My path</h1>' + seg('path', segs, cur);
+  if (cur === 'course') { if (!g) h += '<section class="card"><p class="hint">You are in independent use. The course stays here as a reference; nothing in it is required.</p></section>'; h += viewCourse().replace('<h1>Course</h1>', ''); }
+  else if (cur === 'goals') h += viewGoals();
+  else if (cur === 'pacing') h += viewPacing();
+  else if (cur === 'daily') h += viewPlanToday();
+  else h += viewFlare();
+  return h + '</div>';
 }
 
 /* ---------- PLAN ---------- */
@@ -1198,8 +1378,9 @@ function goalRun(g){
 function newGoal(){ return { name:'', target:'10', step:'5' }; }
 
 function viewPlan(){
-  var h = '<div class="stack"><h1>Plan</h1>' + seg('plan', [['pacing','Pacing'],['today','Today'],['flare','Flare plan']], ui.sub.plan);
-  if (ui.sub.plan === 'pacing') h += viewPacing();
+  var h = '<div class="stack"><h1>Plan</h1>' + seg('plan', [['goals','Goals'],['pacing','Pacing'],['today','Today'],['flare','Flare plan']], ui.sub.plan);
+  if (ui.sub.plan === 'goals') h += viewGoals();
+  else if (ui.sub.plan === 'pacing') h += viewPacing();
   else if (ui.sub.plan === 'today') h += viewPlanToday();
   else h += viewFlare();
   return h + '</div>';
@@ -1316,6 +1497,12 @@ function buildCSVs(days){
   out.push({ name:'thought-records.csv', text: csv([['date_time','situation','thought','emotions','feeling_before_pct','thinking_traps','evidence_for','evidence_against','balanced_thought','feeling_after_pct']].concat(th.map(function(t){ return [fmtISO(t.ts), t.situation, t.thought, t.emotions, t.before, t.traps, t.evFor, t.evAgainst, t.balanced, t.after]; }))) });
   var fe = state.feelings.filter(function(f){ return inRange(f.ts, days); });
   out.push({ name:'feelings-log.csv', text: csv([['date_time','feeling_family','feeling_word','intensity_0_10','body_sensations','urges','chosen_action','notes']].concat(fe.map(function(f){ var fam = familyById(f.family); return [fmtISO(f.ts), fam ? fam.name : f.family, f.word, f.intensity, f.sensations, f.urges, f.action, f.note]; }))) });
+  var at = allAttempts().filter(function(x){ return inRange(x.ts, days); });
+  out.push({ name:'goal-steps.csv', text: csv([['date_time','goal','step','result','notes']].concat(at.map(function(x){ var st = byId(x.goal.steps, x.a.stepId); return [fmtISO(x.ts), x.goal.name, st ? st.text : '', x.a.result, x.a.note]; }))) });
+  var wn = Object.keys(state.wins).sort().filter(function(k){ return inRange(parseKey(k).getTime() + 43200000, days); });
+  out.push({ name:'went-well.csv', text: csv([['date','what_went_well']].concat(wn.map(function(k){ return [k, state.wins[k]]; }))) });
+  var pt = state.patterns.filter(function(x){ return inRange(x.ts, days); });
+  out.push({ name:'pattern-checks.csv', text: csv([['date_time','patterns']].concat(pt.map(function(x){ return [fmtISO(x.ts), x.items]; }))) });
   var act = state.activity.filter(function(a){ return inRange(a.ts, days); });
   out.push({ name:'activity.csv', text: csv([['date_time','kind','label','minutes']].concat(act.map(function(a){ return [fmtISO(a.ts), a.kind, a.label, a.minutes]; }))) });
   var rows = [['session','homework','field','question','answer']];
@@ -1347,8 +1534,18 @@ function buildPDF(days){
   p('Self-reported entries from the Steady Ground app, for discussion with the care team. No name is attached; the sender should identify themselves in their message.', 10, 'italic');
   if (state.profile.about) { h2('About me, in my words'); p(state.profile.about); }
 
+  var pr0 = state.profile;
+  if (pr0.presentation && pr0.presentation.length || pr0.matters) { h2('How my FND shows up'); kv('Presentation', pr0.presentation); kv('Gets in the way most', pr0.difficulties); kv('If symptoms got in the way less, I would be', pr0.matters); }
+  var at = allAttempts().filter(function(x){ return inRange(x.ts, days); });
+  h2('Real-world goals');
+  if (!state.fgoals.length) p('No goals set yet.');
+  state.fgoals.forEach(function(g){ h3(g.name + (g.done ? ' (reached)' : '')); kv('Why it matters', g.why); kv('Steps', g.steps.map(function(st){ return (st.done ? '[done] ' : '[ ] ') + st.text; })); var ga = at.filter(function(x){ return x.goal.id === g.id; }); kv('Tries in this period', ga.length + (ga.length ? ' (' + ga.filter(function(x){ return x.a.result !== 'not'; }).length + ' did all or part)' : '')); ga.slice().sort(function(a,b){ return a.ts - b.ts; }).forEach(function(x){ var st = byId(g.steps, x.a.stepId); p(fmtWhen(x.ts) + ' \u2014 ' + (st ? st.text : '') + ' \u2014 ' + ({did:'did it', part:'did part', not:'did not manage'})[x.a.result] + (x.a.note ? ' \u2014 ' + x.a.note : '')); }); });
+  var wn = Object.keys(state.wins).sort().filter(function(k){ return inRange(parseKey(k).getTime() + 43200000, days); });
+  if (wn.length) { h2('What went well'); wn.forEach(function(k){ p(fmtDay(k) + ': ' + state.wins[k]); }); }
+  var pt = state.patterns.filter(function(x){ return inRange(x.ts, days); });
+  if (pt.length) { h2('Pattern checks'); pt.slice().sort(function(a,b){ return a.ts - b.ts; }).forEach(function(x){ p(fmtWhen(x.ts) + ': ' + joinList(x.items).toLowerCase()); }); }
   var eps = state.episodes.filter(function(e){ return inRange(e.ts, days); });
-  h2('Summary');
+  h2('Symptom summary');
   kv('Episodes logged', eps.length);
   if (eps.length) {
     var sev = eps.filter(function(e){ return e.severity; }).map(function(e){ return e.severity; });
@@ -1442,7 +1639,7 @@ function buildICS(time){
   var hm = time.split(':'), d = new Date(); d.setHours(+hm[0], +hm[1], 0, 0); if (d < new Date()) d = addDays(d, 1);
   var start = dayKey(d).replace(/-/g, '') + 'T' + pad(d.getHours()) + pad(d.getMinutes()) + '00';
   var end = dayKey(d).replace(/-/g, '') + 'T' + pad(d.getHours()) + pad(d.getMinutes() + 5 > 59 ? d.getMinutes() : d.getMinutes() + 5) + '00';
-  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Steady Ground//EN','BEGIN:VEVENT','UID:steady-ground-daily-' + time.replace(':','') + '@local','DTSTAMP:' + start + 'Z','DTSTART:' + start,'DTEND:' + end,'RRULE:FREQ=DAILY','SUMMARY:Steady Ground practice','DESCRIPTION:Two minutes of paced breathing or grounding. Open Steady Ground on your home screen.','BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY','DESCRIPTION:Steady Ground practice','END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
+  return ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Steady Ground//EN','BEGIN:VEVENT','UID:steady-ground-daily-' + time.replace(':','') + '@local','DTSTAMP:' + start + 'Z','DTSTART:' + start,'DTEND:' + end,'RRULE:FREQ=DAILY','SUMMARY:' + (currentGoal() ? 'Steady Ground: ' + currentGoal().name.replace(/[,;\\]/g, ' ') : 'Steady Ground practice'),'DESCRIPTION:' + (currentGoal() ? 'Ready to try the step you planned? Open Steady Ground on your home screen.' : 'Two minutes of paced breathing or grounding. Open Steady Ground on your home screen.'),'BEGIN:VALARM','TRIGGER:PT0M','ACTION:DISPLAY','DESCRIPTION:Steady Ground practice','END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
 }
 function importBackup(file){
   var r = new FileReader();
@@ -1456,6 +1653,8 @@ function importBackup(file){
       mergeList(state.thoughts, d.thoughts); state.thoughts.sort(function(a,b){ return b.ts - a.ts; });
       mergeList(state.goals, d.goals); mergeList(state.activity, d.activity);
       mergeList(state.feelings, d.feelings); state.feelings.sort(function(a,b){ return b.ts - a.ts; });
+      mergeList(state.fgoals, d.fgoals || []); mergeList(state.patterns, d.patterns || []);
+      for (k in d.wins) if (!state.wins[k]) { state.wins[k] = d.wins[k]; added++; }
       for (k in d.profile) if (!state.profile[k] && d.profile[k]) state.profile[k] = d.profile[k];
       for (k in d.badges) if (!state.badges[k]) state.badges[k] = d.badges[k];
       var k;
@@ -1479,13 +1678,21 @@ function importBackup(file){
 function render(){
   stopTimers();
   var v = $('#view'), h, tabs = $('#tabs'), header = $('#header');
-  try { document.documentElement.classList.toggle('text-large', state.prefs.textSize === 'large'); } catch(e){}
+  applyPrefs();
+  try { if (window.speechSynthesis && ui.speaking) { window.speechSynthesis.cancel(); ui.speaking = false; } } catch(e){}
+  if (ui.tab === 'course') { ui.tab = 'path'; ui.sub.path = 'course'; }
+  if (ui.tab === 'plan') { ui.tab = 'path'; ui.sub.path = ui.sub.plan === 'today' ? 'daily' : ui.sub.plan; }
+  if (ui.tab === 'track') { ui.tab = 'tools'; ui.sub.tools = 'log'; }
+  if (ui.tab === 'milestones') { ui.tab = 'progress'; ui.sub.progress = 'milestones'; }
   if (!state.setup.done) { h = viewWelcome(); if (tabs) tabs.hidden = true; if (header) header.hidden = true; }
   else {
     checkMilestones();
     if (tabs) tabs.hidden = false; if (header) header.hidden = false;
     if (ui.tab === 'today') h = viewToday();
     else if (ui.tab === 'progress') h = viewProgress();
+    else if (ui.tab === 'path') h = viewPath();
+    else if (ui.tab === 'toolkit') h = viewToolkit();
+    else if (ui.tab === 'pattern') h = viewPattern();
     else if (ui.tab === 'me') h = viewMe();
     else if (ui.tab === 'track') h = viewTrack();
     else if (ui.tab === 'tools') h = viewTools();
@@ -1498,7 +1705,7 @@ function render(){
   }
   v.innerHTML = h;
   applyColour();
-  var navTab = ({ plan:'today', export:'me', settings:'me' })[ui.tab] || ui.tab;
+  var navTab = ({ plan:'path', course:'path', track:'tools', toolkit:'today', pattern:'today', milestones:'progress' })[ui.tab] || ui.tab;
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){
     if (b.getAttribute('data-tab') === navTab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
@@ -1513,7 +1720,8 @@ function render(){
 function go(tab, sub){ ui.tab = tab; if (sub) { for (var k in sub) ui.sub[k] = sub[k]; } ui.panel = null; ui.lesson = null; ui.session = null; ui.hw = null; ui.scrollTop = true; render(); }
 function openTool(type){
   ui.tab = 'tools'; ui.sub.tools = 'calm'; ui.lesson = null; ui.session = null; ui.hw = null; ui.scrollTop = true;
-  if (type === 'breath') ui.panel = {type:'breath', pace:'4-6', mins:3, running:false, done:false};
+  var preset = (ui.pacePreset && PACES[ui.pacePreset]) ? ui.pacePreset : '4-6'; ui.pacePreset = null;
+  if (type === 'breath') ui.panel = {type:'breath', pace:preset, mins:3, running:false, done:false};
   else if (type === 'ground') ui.panel = {type:'ground', step:0};
   else if (type === 'pmr') ui.panel = {type:'pmr', step:0};
   else if (type === 'scan') { ui.sub.tools = 'feel'; ui.panel = {type:'scan', step:0}; }
@@ -1528,6 +1736,9 @@ function draftFor(name){
   if (name === 'gr') return ui.draftGr;
   if (name === 'goal') return ui.draftGoal;
   if (name === 'feel') return ui.draftFeel;
+  if (name === 'setup') return ui.draftSetup;
+  if (name === 'fgoal') return ui.draftFgoal;
+  if (name === 'attempt') return ui.draftAttempt;
   if (name === 'profile') return state.profile;
   if (name === 'flare') return state.flare;
   if (name === 'course') return state.course.answers;
@@ -1540,19 +1751,70 @@ function byId(list, id){ return list.filter(function(x){ return x.id === id; })[
 var A = {
   tab: function(el){ go(el.getAttribute('data-tab')); },
   sub: function(el){ ui.sub[el.getAttribute('data-group')] = el.getAttribute('data-val'); ui.panel = null; ui.scrollTop = false; render(); },
-  'goto-plan': function(){ go('plan', {plan:'today'}); },
+  'goto-plan': function(){ go('path', {path:'daily'}); },
   'goto-tools': function(){ go('tools', {tools:'calm'}); },
-  'goto-track': function(el){ go('track', {track: el.getAttribute('data-sub') || 'episodes'}); },
+  'goto-tools-now': function(){ go('tools', {tools:'now'}); },
+  'goto-track': function(el){ go('tools', {tools:'log', track: el.getAttribute('data-sub') || 'episodes'}); },
   'goto-today': function(){ go('today'); },
   'goto-export': function(){ ui.exp.links = null; go('export'); },
   'goto-settings': function(){ ui.importMsg = ''; ui.confirmClear = false; ui.remindLinks = null; go('settings'); },
   'goto-milestones': function(){ ui.celebrate = []; go('progress', {progress:'milestones'}); },
-  'goto-plan-pacing': function(){ go('plan', {plan:'pacing'}); },
-  'goto-plan-flare': function(){ go('plan', {plan:'flare'}); },
+  'goto-plan-pacing': function(){ go('path', {path:'pacing'}); },
+  'goto-plan-flare': function(){ go('path', {path:'flare'}); },
   colour: function(el){ state.profile.colour = el.getAttribute('data-val'); save(); ui.refocus = '[data-action="colour"][data-val="' + state.profile.colour + '"]'; render(); },
   'cel-next': function(){ ui.celebrate.shift(); render(); },
   'wb-dismiss': function(){ ui.welcomeBack = false; render(); },
+  'goto-toolkit': function(){ ui.welcomeBack = false; go('toolkit'); },
+  'goto-pattern': function(){ ui.patternSel = []; go('pattern'); },
+  'goto-progress': function(){ go('progress', {progress:'function'}); },
+  'goto-plan-goals': function(){ ui.goalDetail = null; go('path', {path:'goals'}); },
+  'reflect-open': function(){ ui.reflectOpen = true; go('today'); ui.refocus = '#winText'; render(); },
+  'reflect-close': function(){ ui.reflectOpen = false; render(); },
+  'win-save': function(){ var inp = $('#winText'), k = dayKey(new Date()); var v = inp ? inp.value.trim() : ''; if (v) { state.wins[k] = v; save(); fxTick('Noted'); } else { delete state.wins[k]; save(); } ui.reflectOpen = false; render(); },
+  'fgoal-new': function(){ ui.fgoalForm = true; ui.draftFgoal = newGoalDraft(); render(); },
+  'fgoal-cancel': function(){ ui.fgoalForm = false; render(); },
+  'fgoal-save': function(){
+    var d = ui.draftFgoal, name = (d.name || '').trim(); if (!name) { toast('Name the goal'); return; }
+    var steps = [0,1,2].map(function(i){ return (d['step' + i] !== undefined ? d['step' + i] : d.steps[i]) || ''; }).map(function(x){ return x.trim(); }).filter(Boolean);
+    var g = makeGoal(name, (d.why || '').trim(), steps); state.fgoals.push(g); ui.fgoalForm = false; save(); fxTick('Goal added'); ui.goalDetail = g.id; render();
+  },
+  'fgoal-open': function(el){ ui.tab = 'path'; ui.sub.path = 'goals'; ui.goalDetail = el.getAttribute('data-id'); ui.draftAttempt = null; ui.panel = null; ui.scrollTop = true; render(); },
+  'fgoal-close': function(){ ui.goalDetail = null; ui.draftAttempt = null; ui.scrollTop = true; render(); },
+  'fgoal-reached': function(el){ var g = byId(state.fgoals, el.getAttribute('data-goal')); if (!g) return; g.done = true; g.doneTs = Date.now(); g.steps.forEach(function(s){ s.done = true; }); save(); fxTick('Goal reached'); render(); },
+  'fgoal-del': function(el){
+    var id = el.getAttribute('data-id');
+    if (ui.confirmDel === 'fgoal:' + id) { state.fgoals = state.fgoals.filter(function(g){ return g.id !== id; }); ui.confirmDel = null; ui.goalDetail = null; save(); toast('Goal removed'); }
+    else ui.confirmDel = 'fgoal:' + id;
+    render();
+  },
+  'step-add': function(el){ var g = byId(state.fgoals, el.getAttribute('data-goal')), inp = $('#stepText'), t = inp ? inp.value.trim() : ''; if (!g || !t) return; g.steps.push({ id:uid(), text:t, done:false }); save(); render(); },
+  'step-toggle': function(el){ var g = byId(state.fgoals, el.getAttribute('data-goal')), st = g && byId(g.steps, el.getAttribute('data-id')); if (!st) return; st.done = !st.done; save(); if (st.done) fxTick('Step done'); ui.refocus = '[data-action="step-toggle"][data-id="' + st.id + '"]'; render(); },
+  'attempt-new': function(el){ var g = byId(state.fgoals, el.getAttribute('data-goal')); if (!g) return; var ns = nextStep(g); ui.tab = 'path'; ui.sub.path = 'goals'; ui.goalDetail = g.id; ui.draftAttempt = { goalId:g.id, stepId: ns ? ns.id : (g.steps[0] || {}).id, result:'did', note:'' }; ui.scrollTop = true; render(); },
+  'attempt-cancel': function(){ ui.draftAttempt = null; render(); },
+  'attempt-save': function(el){
+    var g = byId(state.fgoals, el.getAttribute('data-goal')), d = ui.draftAttempt; if (!g || !d) return;
+    var r = d.result === 'I did it' || d.result === 'did' ? 'did' : d.result === 'I did part of it' || d.result === 'part' ? 'part' : 'not';
+    g.attempts = g.attempts || []; g.attempts.push({ id:uid(), ts:Date.now(), stepId:d.stepId, result:r, note:(d.note || '').trim() });
+    if (r === 'did') { var st = byId(g.steps, d.stepId); if (st) st.done = true; }
+    ui.draftAttempt = null; save();
+    fxTick(r === 'not' ? 'Trying counts. Noted.' : 'You approached something you were avoiding'); render();
+  },
+  'pattern-pick': function(el){ var v = el.getAttribute('data-val'), i = ui.patternSel.indexOf(v); if (i > -1) ui.patternSel.splice(i, 1); else ui.patternSel.push(v); render(); },
+  'pattern-save': function(){ if (ui.patternSel.length) { state.patterns.unshift({ id:uid(), ts:Date.now(), items:ui.patternSel.slice() }); save(); fxTick('Pattern noted'); } ui.patternSel = []; go('today'); },
+  'pattern-go': function(el){
+    if (ui.patternSel.length) { state.patterns.unshift({ id:uid(), ts:Date.now(), items:ui.patternSel.slice() }); save(); }
+    var next = el.getAttribute('data-next'); ui.patternSel = [];
+    if (next === 'open-tool') { ui.pacePreset = null; openTool(el.getAttribute('data-type')); } else if (A[next]) A[next](el);
+  },
   'text-size': function(el){ state.prefs.textSize = el.getAttribute('data-val'); save(); render(); },
+  'pref-set': function(el){ state.prefs[el.getAttribute('data-key')] = el.getAttribute('data-val'); save(); render(); },
+  'pref-toggle': function(el){ var k = el.getAttribute('data-key'); state.prefs[k] = !state.prefs[k]; save(); render(); },
+  'mode-set': function(el){ state.setup.mode = el.getAttribute('data-val'); save(); render(); },
+  'goto-me': function(){ go('me'); },
+  'pin-toggle': function(el){ var k = el.getAttribute('data-key'), i = state.pins.indexOf(k); if (i > -1) state.pins.splice(i, 1); else state.pins.push(k); save(); ui.refocus = '[data-action="pin-toggle"][data-key="' + k + '"]'; render(); },
+  'quick-two': function(){ ui.pacePreset = null; openTool('breath'); ui.panel.mins = 2; render(); },
+  'read-aloud': function(el){ readAloud(el.getAttribute('data-text-id')); },
+  'teach-full': function(){ ui.fullTeach = true; render(); },
   'remind-time': function(el){ ui.remindTime = el.getAttribute('data-val'); ui.remindLinks = null; render(); },
   'remind-make': function(){
     var f = new File([buildICS(ui.remindTime)], 'steady-ground-reminder.ics', {type:'text/calendar'});
@@ -1561,11 +1823,16 @@ var A = {
     } else { ui.remindLinks = [{ name:f.name, url:URL.createObjectURL(f) }]; render(); }
   },
   'welcome-pick': function(el){ ui.welcomeMode = el.getAttribute('data-val'); render(); },
+  'setup-next': function(){ if (ui.setupStep === 0 && !ui.welcomeMode) return; ui.setupStep = Math.min(3, ui.setupStep + 1); ui.scrollTop = true; render(); },
+  'setup-back': function(){ ui.setupStep = Math.max(0, ui.setupStep - 1); ui.scrollTop = true; render(); },
+  'setup-idea': function(el){ ui.draftSetup.goal = el.getAttribute('data-val'); render(); },
   'welcome-go': function(){
     if (!ui.welcomeMode) return;
+    var d = ui.draftSetup;
+    state.profile.presentation = d.presentation.slice(); state.profile.difficulties = d.difficulties.slice(); state.profile.matters = (d.matters || '').trim();
+    if ((d.goal || '').trim()) state.fgoals.push(makeGoal((d.goal || '').trim(), '', []));
     state.setup.done = true; state.setup.mode = ui.welcomeMode; if (!state.profile.joined) state.profile.joined = Date.now(); save();
-    if (ui.welcomeMode === 'course' && sessions().length) { ui.tab = 'course'; ui.session = 1; ui.hw = null; }
-    else ui.tab = 'today';
+    ui.tab = 'today';
     ui.scrollTop = true; render();
   },
   checkin: function(el){
@@ -1574,7 +1841,7 @@ var A = {
     state.checkins[k][kind] = state.checkins[k][kind] === val ? 0 : val;
     save(); ui.refocus = '[data-action="checkin"][data-kind="' + kind + '"][data-val="' + val + '"]'; render();
   },
-  'open-tool': function(el){ openTool(el.getAttribute('data-type')); },
+  'open-tool': function(el){ ui.pacePreset = el.getAttribute('data-pace'); openTool(el.getAttribute('data-type')); },
   chip: function(el){
     var d = draftFor(el.getAttribute('data-draft')); if (!d) return;
     var f = el.getAttribute('data-field'), v = el.getAttribute('data-val');
@@ -1777,7 +2044,7 @@ var A = {
     save(); render();
   },
 
-  'course-open': function(el){ ui.tab = 'course'; ui.panel = null; ui.lesson = null; ui.session = +el.getAttribute('data-n'); ui.hw = null;
+  'course-open': function(el){ ui.fullTeach = false; ui.tab = 'course'; ui.panel = null; ui.lesson = null; ui.session = +el.getAttribute('data-n'); ui.hw = null;
     var day = el.getAttribute('data-day'); if (day != null) { var s = findSession(ui.session); if (s) s.homework.forEach(function(h, i){ if (String(h.day) === day && ui.hw === null) ui.hw = i; }); }
     ui.scrollTop = true; render(); },
   'course-close': function(){ ui.session = null; ui.hw = null; ui.scrollTop = true; render(); },

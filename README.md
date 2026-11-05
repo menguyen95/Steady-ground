@@ -30,7 +30,7 @@ That address is what you give patients. Nobody can see patient data through it; 
 
 ### Updating the app later
 
-Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v5` to `steady-ground-v6` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v7` to `steady-ground-v8` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
 
 ## Engagement features (version 3)
 
@@ -53,6 +53,30 @@ Edit the milestone list (`BADGES`) and encouragement lines (`ENCOURAGE`) near th
 - **Tools, Feel:** "Name the feeling" (core feeling, specific word, intensity, body sensations, urge, helpful action), a seven-stop body scan, and an urges-and-opposite-action reference. Vocabulary is original; the Braman emotion wheels are copyrighted and are not reproduced in the app.
 - **Me:** name, accent colour, recent milestones and practice ring, "the version of me I am working toward", about me (included in the clinic report), care team, links to plans and settings.
 - **Paced breathing** circle now grows for the whole in-breath and shrinks for the whole out-breath in one smooth motion.
+
+## Version 6: designed around the engagement review
+
+- **Set-up asks three things:** how the patient's FND shows up, what gets in the way most, and one real-world goal. These drive the toolkit, goal ideas and the clinic report.
+- **Today is need-first:** "What would help you today?" with four doors (I'm having symptoms, Take a small step, Understand a pattern, Reflect on my day), the current goal with its next step, and a week-in-review written in functional terms ("you tried a real-world step 3 times despite 2 episodes").
+- **I'm having symptoms** opens a toolkit ordered for the patient's presentation (seizure-like, movement, sensory, speech, cognitive, fatigue, dizziness), plus what has helped them before. Logging comes after, and is optional.
+- **Real-world goals** (Plan, Goals): a goal broken into graded steps, "I tried it" with did / part / not, and feedback that names the achievement ("You approached something you were avoiding").
+- **Understand a pattern:** a one-minute check (avoided, pushed and crashed, checked symptoms, sought reassurance, cancelled, over-rested) with one line of teaching and one action each.
+- **Progress leads with function** (tries, planned activities completed, practices, functioning, mood/energy). Symptom charts sit in their own tab with a note to look weekly, not daily.
+- **Milestones reframed** around skills and real-world steps; the streak counter and streak badges are gone; practice days accumulate and never reset; there is a milestone for coming back after a break.
+- **Course shows its three phases** and, once finished, Today switches to a light maintenance mode that says using the app less is a good sign.
+- The reminder names the patient's current goal.
+
+## Version 7: visual identity and UX principles
+
+- **Identity:** ivory background, charcoal text, forest green for primary actions, sage for supporting surfaces, terracotta only in the mark and milestone medals. DM Sans throughout (28 px titles, 21 px headings, 17 px body, 15 px supporting text; no thin weights, no all-caps). All text colours meet 4.5:1 in both light and dark themes. New hills-sun-path mark and app icons.
+- **Four tabs:** Home, My Path (course, goals, pacing, today's plan, flare plan), Tools (Now, Calm, Feel, Move, Log), Progress. Profile and settings sit behind the person icon in the header.
+- **Context-sensitive entry on Home:** I need help right now, I have two minutes, I want to take a step. Pinned tools sit beneath; any tool can be pinned from the Tools tab.
+- **Gentle completion feedback:** a brief checkmark and a short acknowledgment; no confetti, no vibration. Milestone cards slide in quietly.
+- **Appearance settings:** theme (match phone, light, dark), three text sizes up to 22 px, and a "reduce visual stimulation" switch that removes animations and completion marks.
+- **Progressive disclosure:** each course session opens with its first part and a "Read the full session" button. Sessions and quick reads have a Read aloud button (the phone's own speech, works offline).
+- **Guided treatment vs independent use:** chosen at set-up, switchable under Me. Independent use hides course prompts from Home and leads My Path with goals; the course stays as a reference.
+- **Transparent privacy:** a "Your data and privacy" card (what is saved, what is shared, no monitoring) and wording on the help screens that the app cannot call anyone.
+- Set-up now lands on Home so a first-time user can complete something useful within about two minutes.
 
 ## Installing on an iPhone
 
