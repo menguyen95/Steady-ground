@@ -9,14 +9,15 @@ var canStore = testStore();
 function blank(){
   return { setup:{done:false, mode:''}, episodes:[], grounding:[], thoughts:[], checkins:{}, weeks:{}, goals:[], activity:[], plan:{},
            flare:{signs:'',helps:'',contacts:'',pause:''}, read:{}, course:{answers:{}, done:{}, read:{}},
-           badges:{}, badgesInit:false, prefs:{textSize:'normal'}, stats:{shares:0}, lastOpen:0 };
+           badges:{}, badgesInit:false, prefs:{textSize:'normal'}, stats:{shares:0}, lastOpen:0,
+           feelings:[], profile:{name:'', colour:'teal', vision:'', about:'', team:'', joined:0} };
 }
 var state = blank();
 function mergeInto(p){
   var b = blank();
   for (var k in b) {
     if (p && p[k] !== undefined && p[k] !== null) {
-      if (k === 'course' || k === 'setup' || k === 'flare' || k === 'prefs' || k === 'stats') { for (var kk in b[k]) if (p[k][kk] !== undefined) b[k][kk] = p[k][kk]; }
+      if (k === 'course' || k === 'setup' || k === 'flare' || k === 'prefs' || k === 'stats' || k === 'profile') { for (var kk in b[k]) if (p[k][kk] !== undefined) b[k][kk] = p[k][kk]; }
       else b[k] = p[k];
     }
   }
@@ -51,13 +52,42 @@ function fmtWhen(ts){
 function fmtISO(ts){ var d = new Date(ts); return dayKey(d) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 function localInput(d){ return dayKey(d) + 'T' + pad(d.getHours()) + ':' + pad(d.getMinutes()); }
 function weekKey(d){ d = (d instanceof Date) ? d : new Date(d); var x = new Date(d); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return dayKey(x); } /* Monday */
-function greeting(){ var h = new Date().getHours(); return h < 5 ? 'Hello' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; }
+function greeting(){ var h = new Date().getHours(), g = h < 5 ? 'Hello' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening'; var n = (state.profile && state.profile.name || '').trim().split(/\s+/)[0]; return n ? g + ', ' + esc(n) : g; }
 function joinList(a){ return (a || []).join(', '); }
 function avg(a){ return a.length ? a.reduce(function(s,x){ return s + x; }, 0) / a.length : 0; }
 function toast(msg){
   var t = $('#toast'); if (!t) return;
   t.textContent = msg; t.classList.add('toast-on');
   clearTimeout(toast._t); toast._t = setTimeout(function(){ t.classList.remove('toast-on'); }, 2600);
+}
+function cssVar(name){ try { return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#2D6878'; } catch(e){ return '#2D6878'; } }
+/* A brief, gentle congratulatory burst shown each time a task is completed.
+   Non-blocking, auto-removes, and respects reduced-motion (a quiet static tick, no confetti). */
+function fxTick(msg){
+  if (msg) toast(msg);
+  try {
+    var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var layer = document.createElement('div'); layer.className = 'fx-layer';
+    var check = document.createElement('div'); check.className = 'fx-check';
+    check.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 13l4 4L19 7"/></svg>';
+    layer.appendChild(check);
+    if (!reduce) {
+      var cols = [cssVar('--good'), cssVar('--accent'), cssVar('--warn')];
+      for (var i = 0; i < 14; i++) {
+        var b = document.createElement('span'); b.className = 'fx-bit';
+        var ang = Math.random() * Math.PI * 2, dist = 55 + Math.random() * 95;
+        b.style.setProperty('--dx', (Math.cos(ang) * dist).toFixed(0) + 'px');
+        b.style.setProperty('--dy', (Math.sin(ang) * dist).toFixed(0) + 'px');
+        b.style.setProperty('--r', (Math.random() * 360).toFixed(0) + 'deg');
+        b.style.background = cols[i % cols.length];
+        b.style.animationDelay = (Math.random() * 0.1).toFixed(2) + 's';
+        layer.appendChild(b);
+      }
+    }
+    document.body.appendChild(layer);
+    try { if (navigator.vibrate) navigator.vibrate(15); } catch(e){}
+    setTimeout(function(){ try { document.body.removeChild(layer); } catch(e){} }, reduce ? 850 : 1150);
+  } catch(e){}
 }
 function logActivity(o){
   state.activity.push({ id: uid(), ts: Date.now(), goalId: o.goalId || null, minutes: o.minutes, kind: o.kind, label: o.label || '' });
@@ -92,7 +122,7 @@ var SYMPTOMS = ['Weakness','Shaking or tremor','Difficulty walking','Seizure-lik
 var TRIGGERS = ['Stress or worry','Conflict','Poor sleep','Overdid it','Noise, crowds or screens','Pain','Fatigue','Strong emotion','Body sensation','Nothing obvious'];
 var WARNINGS = ['Subtle physical shift','Change in breathing','Muscle tension','Change in mood','Racing thoughts','Feeling off','Nothing noticeable'];
 var HELPS = ['Paced breathing','5-4-3-2-1 grounding','Muscle relaxation','Rest','Gentle movement','Shifted my attention','Talked to someone','Prescribed medication','Nothing yet'];
-var SKILLS = ['Paced breathing','5-4-3-2-1 grounding','Progressive muscle relaxation','Attention shift','Other'];
+var SKILLS = ['Paced breathing','5-4-3-2-1 grounding','Progressive muscle relaxation','Body scan','Attention shift','Other'];
 var EMOTIONS = ['Anxious','Scared','Sad','Frustrated','Ashamed','Angry','Numb','Overwhelmed','Hopeless'];
 var TRAPS = [
   ['Catastrophising','Expecting the worst possible outcome.'],
@@ -177,6 +207,42 @@ var LESSONS = [
     'Notice your early warning signs, drop back to a smaller steady amount of activity for a few days, keep using your calming skills, and tell someone on your care team if it lasts.',
     'Be as kind to yourself as you would be to a friend. Write your plan now, while you are feeling well.']}
 ];
+
+/* ---------- feelings: families, words, sensations, urges, helpful actions ----------
+   Original vocabulary, structured the way emotion wheels teach it: core feeling, a more
+   specific word, what it feels like in the body, what it pushes you to do, and what helps. */
+var FAMILIES = [
+  {id:'angry', name:'Angry', words:['Irritated','Frustrated','Resentful','Defensive','Hurt and angry','Furious'],
+   urges:['Snap at someone','Shut the conversation down','Push harder','Replay it over and over','Withdraw and seethe'],
+   help:['Pause before replying: three slow breaths out','Walk or move for a few minutes, then decide','Name the need underneath the anger','Say one honest sentence instead of ten']},
+  {id:'afraid', name:'Afraid', words:['Nervous','Worried','On edge','Panicky','Dreading','Helpless'],
+   urges:['Avoid the thing','Check my symptoms','Ask for reassurance','Freeze and wait','Leave early'],
+   help:['Ground with 5-4-3-2-1','Stay two more minutes, then choose','Paced breathing with a longer breath out','Do a small version of the thing you are avoiding']},
+  {id:'sad', name:'Sad', words:['Low','Lonely','Disappointed','Grieving','Hopeless','Drained'],
+   urges:['Stay in bed','Cancel plans','Go quiet with people','Stop doing the things that help','Say I am fine'],
+   help:['Message one person, even a short hello','One small activity from your plan','Gentle movement or fresh air','Let the feeling be there without fixing it for a few minutes']},
+  {id:'ashamed', name:'Ashamed or disgusted', words:['Embarrassed','Self-critical','Unworthy','Exposed','Guilty','Put off'],
+   urges:['Hide','Apologise again and again','Cover it up','Punish myself','Avoid their eyes'],
+   help:['Say what you would say to a friend in this spot','Stay in the room and keep your head up','Check the facts: what actually happened?','Repair if needed, then let it go']},
+  {id:'surprised', name:'Surprised or confused', words:['Startled','Thrown','Unsure','Overwhelmed','Curious','Amazed'],
+   urges:['React before thinking','Go blank','Grab for an answer','Shut down'],
+   help:['Pause and name what just happened','Ask a question instead of guessing','Give yourself a minute before deciding','Let it be new for a moment']},
+  {id:'happy', name:'Happy or calm', words:['Content','Relieved','Proud','Hopeful','Warm','Settled'],
+   urges:['Do everything at once','Skip my rest','Tell everyone','Savour it quietly'],
+   help:['Savour it for thirty seconds on purpose','Note what led here so you can repeat it','Keep to your steady amount even on a good day','Share it with someone who will be glad']}
+];
+var SENSATIONS = ['Tight chest','Racing heart','Shallow breathing','Lump in throat','Tense jaw','Tight shoulders','Churning stomach','Shaky','Hot face','Cold hands','Heavy limbs','Restless legs','Light-headed','Numb','Tired all over','Headache','Warm and loose','Light and open','Steady'];
+var BODYSCAN = [
+  ['Feet and legs','Notice your feet on the floor. Is there pressure, warmth, tingling, nothing? Then your calves and thighs.'],
+  ['Hips and lower back','Notice how you are sitting. Any tightness, heaviness or ease?'],
+  ['Stomach','Rest your attention on your belly as it moves with your breath. Churning, soft, tight?'],
+  ['Chest and breath','Feel the breath come and go. Fast or slow, high or low, tight or easy.'],
+  ['Shoulders and arms','Are your shoulders near your ears? Let them drop if they want to. Notice your hands.'],
+  ['Throat, jaw and face','Notice your jaw, your tongue, the space between your eyebrows. Soften what softens.'],
+  ['Whole body','Take in the whole body at once. Give what you notice one or two words, with no need to change it.']
+];
+function familyById(id){ return FAMILIES.filter(function(f){ return f.id === id; })[0]; }
+function newFeel(){ return { family:'', word:'', sensations:[], intensity:5, urges:[], action:'', note:'' }; }
 
 /* ---------- practice stats and milestones ---------- */
 function practiceDaySet(){ var s = {}; state.grounding.forEach(function(g){ s[dayKey(g.ts)] = 1; }); return s; }
@@ -273,10 +339,58 @@ function ring(pct, label, sub){
   var r = 34, c = 2 * Math.PI * r, off = c * (1 - Math.min(1, pct));
   return '<div class="ring"><svg viewBox="0 0 80 80" aria-hidden="true"><circle class="ring-bg" cx="40" cy="40" r="' + r + '"/><circle class="ring-fg" cx="40" cy="40" r="' + r + '" stroke-dasharray="' + c.toFixed(1) + '" stroke-dashoffset="' + off.toFixed(1) + '"/></svg><div class="ring-txt"><span class="ring-big">' + label + '</span><span class="ring-sub">' + sub + '</span></div></div>';
 }
+function viewProgress(){
+  var h = '<div class="stack"><h1>My progress</h1>' + seg('progress', [['trends','Trends'],['progression','Symptoms'],['milestones','Milestones'],['completed','Done']], ui.sub.progress);
+  if (ui.sub.progress === 'trends') h += viewTrends();
+  else if (ui.sub.progress === 'progression') h += viewProgression();
+  else if (ui.sub.progress === 'milestones') h += viewMilestones();
+  else h += viewCompleted();
+  return h + '</div>';
+}
+function viewProgression(){
+  var weeks = [], d = parseKey(weekKey(new Date()));
+  for (var i = 7; i >= 0; i--) weeks.push(dayKey(addDays(d, -7 * i)));
+  function inWeek(ts, wk){ var k = dayKey(ts); return k >= wk && k < dayKey(addDays(parseKey(wk), 7)); }
+  var eps = weeks.map(function(wk){ return state.episodes.filter(function(e){ return inWeek(e.ts, wk); }).length; });
+  var sev = weeks.map(function(wk){ var s = state.episodes.filter(function(e){ return inWeek(e.ts, wk) && e.severity; }).map(function(e){ return e.severity; }); return s.length ? +avg(s).toFixed(2) : 0; });
+  var pr = weeks.map(function(wk){ return state.grounding.filter(function(g){ return inWeek(g.ts, wk); }).length; });
+  var fn = weeks.map(function(wk){ var w = state.weeks[wk]; return w && w.functioning != null ? w.functioning : 0; });
+  if (!state.episodes.length && !state.grounding.length) return '<section class="card empty"><h2>Symptom progression will appear here</h2><p class="hint">Once you have logged episodes across a few weeks, this shows how often they happen, how severe they are, and how much you are practising, week by week.</p></section>';
+  var h = '<section class="card"><h2>Episodes per week</h2><p class="hint">Last 8 weeks, Monday to Sunday.</p>' + chartBars(weeks, eps, Math.max(4, Math.max.apply(null, eps)), 'Episodes per week over the last 8 weeks') + '</section>';
+  h += '<section class="card"><h2>Average severity</h2><p class="hint">1 mild, 2 moderate, 3 severe. Weeks with no episodes show nothing.</p>' + chartBars(weeks, sev, 3, 'Average episode severity per week') + '</section>';
+  h += '<section class="card"><h2>Calming practices per week</h2>' + chartBars(weeks, pr, Math.max(7, Math.max.apply(null, pr)), 'Calming practices per week') + '</section>';
+  if (fn.some(function(x){ return x > 0; })) h += '<section class="card"><h2>Overall functioning</h2><p class="hint">Your weekly summary rating, 0 to 10.</p>' + chartBars(weeks, fn, 10, 'Weekly functioning rating') + '</section>';
+  var first = weeks.slice(0,4), last = weeks.slice(4), e1 = first.reduce(function(s,w,i){ return s + eps[i]; }, 0), e2 = last.reduce(function(s,w,i){ return s + eps[i+4]; }, 0);
+  var p1 = first.reduce(function(s,w,i){ return s + pr[i]; }, 0), p2 = last.reduce(function(s,w,i){ return s + pr[i+4]; }, 0);
+  h += '<section class="card"><h2>Last four weeks against the four before</h2><p>Episodes: ' + e2 + ' (' + e1 + ' before). Practices: ' + p2 + ' (' + p1 + ' before).</p><p class="hint">Symptoms rise and fall. The useful question is whether the practice is building, not whether every week is better than the last.</p></section>';
+  return h;
+}
+function viewCompleted(){
+  var ev = [];
+  state.grounding.forEach(function(g){ ev.push({ ts:g.ts, cat:'calm', text:g.skill + (g.before >= 0 && g.after >= 0 ? ', stress ' + g.before + ' to ' + g.after : '') }); });
+  state.episodes.forEach(function(e){ ev.push({ ts:e.ts, cat:'track', text:'Logged an episode' + (e.types.length ? ': ' + joinList(e.types) : '') }); });
+  state.thoughts.forEach(function(t){ ev.push({ ts:t.ts, cat:'track', text:'Thought record' + (t.thought ? ': ' + t.thought : '') }); });
+  state.feelings.forEach(function(f){ var fam = familyById(f.family); ev.push({ ts:f.ts, cat:'track', text:'Named a feeling: ' + (fam ? fam.name.toLowerCase() : '') + (f.word ? ', ' + f.word.toLowerCase() : '') }); });
+  state.activity.forEach(function(a){ if (a.kind === 'move') ev.push({ ts:a.ts, cat:'move', text:a.label + ', ' + a.minutes + ' min' }); if (a.kind === 'goal') ev.push({ ts:a.ts, cat:'plan', text:'+' + a.minutes + ' min of ' + a.label }); });
+  var S = sessions();
+  Object.keys(state.course.done).forEach(function(k){ var p = k.split(':'), s = findSession(+p[0]); var hw = s && s.homework.filter(function(h){ return String(h.day) === p[1]; })[0]; ev.push({ ts:state.course.done[k], cat:'course', text:'Session ' + p[0] + ' homework done' + (hw ? ': ' + hwTitle(hw) : '') }); });
+  BADGES.forEach(function(b){ if (state.badges[b.id]) ev.push({ ts:state.badges[b.id], cat:'share', text:'Milestone: ' + b.name }); });
+  ev = ev.filter(function(e){ return e.ts > 0; }).sort(function(a,b){ return b.ts - a.ts; }).slice(0, 150);
+  if (!ev.length) return '<section class="card empty"><h2>Completed tasks will appear here</h2><p class="hint">Every practice, log entry, homework and milestone, day by day.</p></section>';
+  var days = {}, order = [];
+  ev.forEach(function(e){ var k = dayKey(e.ts); if (!days[k]) { days[k] = []; order.push(k); } days[k].push(e); });
+  var total = ev.length, wk = lastDays(7), n7 = ev.filter(function(e){ return wk.indexOf(dayKey(e.ts)) > -1; }).length;
+  var h = '<section class="card"><p><strong>' + n7 + '</strong> things done in the last 7 days, <strong>' + total + '</strong> in your recent history.</p></section>';
+  h += '<section class="card"><ul class="timeline">' + order.map(function(k){
+    return '<li class="tl-day"><p class="eyebrow">' + esc(parseKey(k).toLocaleDateString(undefined, {weekday:'long', month:'short', day:'numeric'})) + '</p>' + days[k].map(function(e){
+      return '<div class="tl-item"><span class="tl-ic">' + badgeIcon(e.cat) + '</span><span class="tl-text">' + esc(e.text) + '<span class="meta"> · ' + esc(new Date(e.ts).toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'})) + '</span></span></div>';
+    }).join('') + '</li>';
+  }).join('') + '</ul></section>';
+  return h;
+}
 function viewMilestones(){
   var earned = BADGES.filter(function(b){ return state.badges[b.id]; }).length, s = stats();
-  var h = '<div class="stack">' + backBtn('goto-today', 'Back') + '<h1>Milestones</h1>' +
-    '<section class="card"><div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<div class="stack-s" style="flex:1; min-width:160px"><p><strong>' + s.ground + '</strong> calming ' + (s.ground === 1 ? 'practice' : 'practices') + ' in total</p><p><strong>' + s.last7 + '</strong> of the last 7 days with a practice</p>' + (s.run >= 2 ? '<p><strong>' + s.run + '</strong> days running</p>' : '') + '</div></div>' +
+  var h = '<section class="card"><div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<div class="stack-s" style="flex:1; min-width:160px"><p><strong>' + s.ground + '</strong> calming ' + (s.ground === 1 ? 'practice' : 'practices') + ' in total</p><p><strong>' + s.last7 + '</strong> of the last 7 days with a practice</p>' + (s.run >= 2 ? '<p><strong>' + s.run + '</strong> days running</p>' : '') + '</div></div>' +
     '<p class="hint">' + earned + ' of ' + BADGES.length + ' milestones reached. A missed day is not a reset; the next practice simply starts the next run.</p></section>';
   Object.keys(CAT_NAMES).forEach(function(cat){
     var list = BADGES.filter(function(b){ return b.cat === cat; });
@@ -285,12 +399,42 @@ function viewMilestones(){
       return '<div class="badge-tile ' + (on ? 'on' : '') + '"><div class="medal medal-' + cat + '">' + badgeIcon(cat) + '</div><div class="badge-body"><strong>' + esc(b.name) + '</strong><span class="meta">' + (on ? 'Reached ' + esc(fmtDay(dayKey(state.badges[b.id]))) : esc(b.how)) + '</span></div></div>';
     }).join('') + '</div></section>';
   });
+  return h;
+}
+
+/* ---------- ME (profile) ---------- */
+var COLOURS = { teal:['#2D6878','#6FB6C6'], green:['#3F7350','#8CC79A'], plum:['#6B4C7A','#B99BC9'], rust:['#9A4A2E','#E0956F'], navy:['#2F4A7A','#8FA8D8'] };
+function applyColour(){
+  try {
+    var c = COLOURS[state.profile.colour] || COLOURS.teal, dark = document.documentElement.getAttribute('data-theme') === 'dark' || (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches && document.documentElement.getAttribute('data-theme') !== 'light');
+    var r = document.documentElement.style;
+    if (state.profile.colour && state.profile.colour !== 'teal') { r.setProperty('--accent', dark ? c[1] : c[0]); r.setProperty('--accent-soft', dark ? c[0] + '55' : c[1] + '55'); }
+    else { r.removeProperty('--accent'); r.removeProperty('--accent-soft'); }
+  } catch(e){}
+}
+function initials(name){ var p = (name || '').trim().split(/\s+/).filter(Boolean); return p.length ? (p[0][0] + (p.length > 1 ? p[p.length-1][0] : '')).toUpperCase() : '•'; }
+function viewMe(){
+  var pr = state.profile, s = stats(), earned = BADGES.filter(function(b){ return state.badges[b.id]; }), recent = earned.sort(function(a,b){ return state.badges[b.id] - state.badges[a.id]; }).slice(0,3);
+  var vision = pr.vision || state.course.answers.s1d2_4 || '';
+  var joined = pr.joined ? fmtDay(dayKey(pr.joined)) : '';
+  var h = '<div class="stack"><h1>Me</h1>';
+  h += '<section class="card"><div class="row" style="align-items:center"><div class="avatar">' + esc(initials(pr.name)) + '</div><div class="stack-s" style="flex:1; min-width:160px"><h2>' + esc(pr.name || 'Your name') + '</h2><p class="meta">' + (joined ? 'Using Steady Ground since ' + esc(joined) + '. ' : '') + s.ground + ' practices, ' + earned.length + ' milestones.</p></div></div>' +
+       lineField('profile','name','Name or nickname',pr.name,'How you would like to be greeted') +
+       '<div class="field"><span class="lbl">Colour</span><div class="swatches" role="group" aria-label="Accent colour">' + Object.keys(COLOURS).map(function(k){ return '<button type="button" class="swatch" style="background:' + COLOURS[k][0] + '" aria-label="' + k + '" aria-pressed="' + ((pr.colour || 'teal') === k) + '" data-action="colour" data-val="' + k + '"></button>'; }).join('') + '</div></div></section>';
+  h += '<section class="card"><div class="item-head"><h2>My milestones</h2><button type="button" class="link" data-action="goto-milestones">See all ' + earned.length + '/' + BADGES.length + '</button></div>' +
+       (recent.length ? '<div class="badges">' + recent.map(function(b){ return '<div class="badge-tile on"><div class="medal medal-' + b.cat + '">' + badgeIcon(b.cat) + '</div><div class="badge-body"><strong>' + esc(b.name) + '</strong><span class="meta">Reached ' + esc(fmtDay(dayKey(state.badges[b.id]))) + '</span></div></div>'; }).join('') + '</div>' : '<p class="hint">Your first milestone is one calming practice away.</p>') +
+       '<div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<p style="flex:1; min-width:160px">' + s.last7 + ' of the last 7 days with a practice' + (s.run >= 2 ? ', ' + s.run + ' days running' : '') + '.</p></div></section>';
+  h += '<section class="card"><h2>The version of me I am working toward</h2><p class="hint">From Session 1, Day 2. Read it on a hard day.</p>' + textField('profile','vision','',vision,3,'Someone who has FND but it does not run my life') + '</section>';
+  h += '<section class="card"><h2>About me</h2><p class="hint">Anything you want the app, or a clinician reading your report, to know: what your symptoms look like, what helps, what you enjoy.</p>' + textField('profile','about','',pr.about,4,'') + '</section>';
+  h += '<section class="card"><h2>My care team</h2><p class="hint">Names and numbers. Also used by your flare plan.</p>' + textField('profile','team','',pr.team || state.flare.contacts,3,'Dr, therapist, physiotherapist, a friend') + '</section>';
+  h += '<section class="card"><h2>My plans</h2><div class="row"><button type="button" class="btn" data-action="goto-plan-pacing">Pacing goals</button><button type="button" class="btn" data-action="goto-plan-flare">Flare plan</button><button type="button" class="btn" data-action="goto-plan">Today\'s plan</button></div></section>';
+  h += '<section class="card"><h2>Settings and data</h2><div class="row"><button type="button" class="btn btn-primary" data-action="goto-export">Share with my clinic</button><button type="button" class="btn" data-action="goto-settings">Text size, reminders, backup</button></div></section>';
   return h + '</div>';
 }
 
 /* ---------- ui state ---------- */
 var ui = {
-  tab:'today', sub:{track:'episodes', tools:'calm', plan:'pacing', export:'pdf'},
+  tab:'today', sub:{track:'episodes', tools:'calm', plan:'pacing', export:'pdf', progress:'trends'}, draftFeel:null, feelStep:1,
   panel:null, draftEp:null, draftTh:null, thStep:1, draftGoal:null, goalForm:false, draftGr:null,
   example:false, confirmDel:null, confirmClear:false, summaryText:null,
   planKind:'activity', lesson:null, session:null, hw:null, scrollTop:false, refocus:null,
@@ -493,12 +637,31 @@ function newGr(){ return { when: localInput(new Date()), skill:'Paced breathing'
 var SEV = ['', 'Mild', 'Moderate', 'Severe'];
 
 function viewTrack(){
-  var h = '<div class="stack">' + '<h1>Track</h1>' + seg('track', [['episodes','Episodes'],['grounding','Grounding'],['thoughts','Thoughts'],['trends','Trends']], ui.sub.track);
+  var h = '<div class="stack">' + '<h1>Track</h1>' + seg('track', [['episodes','Episodes'],['grounding','Grounding'],['thoughts','Thoughts'],['feelings','Feelings']], ui.sub.track);
   if (ui.sub.track === 'episodes') h += viewEpisodes();
   else if (ui.sub.track === 'grounding') h += viewGrounding();
   else if (ui.sub.track === 'thoughts') h += viewThoughts();
-  else h += viewTrends();
+  else h += viewFeelings();
   return h + '</div>';
+}
+function viewFeelings(){
+  var h = '<section class="card"><h2>Feelings log</h2><p class="hint">Each time you pause and name a shift in mood, it lands here. Session 3 asks for this on Day 2 and Day 5; you can do it any time.</p><div><button type="button" class="btn btn-primary" data-action="feel-new">Name a feeling</button></div></section>';
+  if (!state.feelings.length) return h + '<section class="card"><p class="hint">No feelings logged yet.</p></section>';
+  var set = {}; lastDays(14).forEach(function(d){ set[d] = 1; });
+  var recent = state.feelings.filter(function(f){ return set[dayKey(f.ts)]; });
+  var fams = {}; recent.forEach(function(f){ fams[f.family] = (fams[f.family] || 0) + 1; });
+  var top = Object.keys(fams).sort(function(a,b){ return fams[b] - fams[a]; }).slice(0,3);
+  var sens = topCounts(recent, 'sensations', 3);
+  if (recent.length) h += '<section class="card"><h2>Last 14 days</h2><p>' + recent.length + ' ' + (recent.length === 1 ? 'entry' : 'entries') + '. Most often: ' + esc(top.map(function(k){ var f = familyById(k); return (f ? f.name.toLowerCase() : k) + ' (' + fams[k] + ')'; }).join(', ')) + '.</p>' + (sens.length ? '<p class="meta">Body signals that keep showing up: ' + esc(joinList(sens.map(function(x){ return x[0].toLowerCase(); }))) + '.</p>' : '') + '</section>';
+  h += '<section class="card"><h2>Recent</h2><ul class="list">' + state.feelings.slice(0,40).map(function(f){
+    var fam = familyById(f.family), confirm = ui.confirmDel === 'feel:' + f.id;
+    return '<li class="item"><div class="item-head"><strong>' + esc((fam ? fam.name : 'Feeling') + (f.word ? ': ' + f.word.toLowerCase() : '')) + '</strong><span class="pill">' + f.intensity + '/10</span></div><div class="meta">' + esc(fmtWhen(f.ts)) + '</div>' +
+      (f.sensations.length ? '<div><span class="meta">In the body: </span>' + esc(joinList(f.sensations)) + '</div>' : '') +
+      (f.urges.length ? '<div><span class="meta">Urge: </span>' + esc(joinList(f.urges)) + '</div>' : '') +
+      (f.action ? '<div><span class="meta">Chose: </span>' + esc(f.action) + '</div>' : '') + (f.note ? '<div>' + esc(f.note) + '</div>' : '') +
+      '<div><button type="button" class="link ' + (confirm ? 'link-danger' : '') + '" data-action="feel-del" data-id="' + f.id + '">' + (confirm ? 'Tap again to delete' : 'Delete') + '</button></div></li>';
+  }).join('') + '</ul></section>';
+  return h;
 }
 
 function viewEpisodes(){
@@ -722,11 +885,19 @@ function viewTools(){
     if (p.type === 'breath') return panelBreath(p);
     if (p.type === 'ground') return panelGround(p);
     if (p.type === 'pmr') return panelPMR(p);
+    if (p.type === 'scan') return panelScan(p);
     if (p.type === 'shift') return panelShift(p);
     if (p.type === 'move') return panelMove(p);
+    if (p.type === 'urges') return panelUrges(p);
+    if (p.type === 'feel') return panelFeel(p);
   }
-  var h = '<div class="stack"><h1>Tools</h1>' + seg('tools', [['calm','Calm'],['move','Move']], ui.sub.tools);
-  if (ui.sub.tools === 'calm') {
+  var h = '<div class="stack"><h1>Tools</h1>' + seg('tools', [['calm','Calm'],['feel','Feel'],['move','Move']], ui.sub.tools);
+  if (ui.sub.tools === 'feel') {
+    h += '<section class="card"><p>Feelings show up in the body first. Naming the feeling, where it sits, and what it pushes you to do gives you a choice about what happens next. This follows the emotion wheels used in Session 3.</p></section>' +
+         '<button type="button" class="tool-btn" data-action="feel-new"><span class="t">Name the feeling</span><span class="meta">Core feeling, body sensations, the urge, and what would help. About two minutes.</span></button>' +
+         '<button type="button" class="tool-btn" data-action="panel" data-type="scan"><span class="t">Body scan</span><span class="meta">Seven slow stops from feet to face, noticing without changing</span></button>' +
+         '<button type="button" class="tool-btn" data-action="panel" data-type="urges"><span class="t">Urges and opposite action</span><span class="meta">What each feeling pushes you to do, and what helps instead</span></button>';
+  } else if (ui.sub.tools === 'calm') {
     h += '<button type="button" class="tool-btn" data-action="panel" data-type="breath"><span class="t">Paced breathing</span><span class="meta">A gentle pacer with a longer breath out</span></button>' +
          '<button type="button" class="tool-btn" data-action="panel" data-type="ground"><span class="t">5-4-3-2-1 sensory grounding</span><span class="meta">Bring your attention back to the room, one sense at a time</span></button>' +
          '<button type="button" class="tool-btn" data-action="panel" data-type="pmr"><span class="t">Progressive muscle relaxation</span><span class="meta">Tense and release, one muscle group at a time</span></button>' +
@@ -740,7 +911,7 @@ function viewTools(){
   }
   return h + '</div>';
 }
-var TOOL_NAMES = { breath:'Paced breathing', ground:'5-4-3-2-1 grounding', pmr:'Progressive muscle relaxation', shift:'Attention shift' };
+var TOOL_NAMES = { breath:'Paced breathing', ground:'5-4-3-2-1 grounding', pmr:'Progressive muscle relaxation', shift:'Attention shift', scan:'Body scan' };
 function panelBefore(p){
   return '<div class="stack">' + backBtn('panel-close', 'Back to tools') + '<h1>' + esc(TOOL_NAMES[p.type]) + '</h1>' +
     '<section class="card"><p class="lbl">Before you start, how stressed do you feel right now?</p>' + scaleButtons('panel','before',0,10,-1,true) +
@@ -765,7 +936,7 @@ function saveGrounding(p, minutes){
   state.grounding.unshift({ id: uid(), ts: Date.now(), skill: TOOL_NAMES[p.type], before: p.before >= 0 ? p.before : -1, after: p.after >= 0 ? p.after : -1, minutes: minutes || 0, note: '' });
   state.grounding.sort(function(a,b){ return b.ts - a.ts; });
   if (minutes >= 1) logActivity({ kind:'calm', minutes:minutes, label:TOOL_NAMES[p.type] });
-  save();
+  save(); fxTick();
 }
 
 function panelBreath(p){
@@ -775,7 +946,7 @@ function panelBreath(p){
       '<div class="row"><button type="button" class="btn btn-primary" data-action="breath-again">Do another</button><button type="button" class="btn btn-quiet" data-action="panel-close">Done</button></div></section></div>';
   }
   if (p.running) {
-    return h + '<section class="card"><div class="breath" role="timer" aria-live="off"><div class="orb" id="orb"></div><div class="breath-text"><span class="ph" id="bphase">Breathe in</span><span class="big" id="bcount"></span></div></div>' +
+    return h + '<section class="card"><div class="breath" role="timer" aria-live="off"><div class="orb-glow" id="orbglow"></div><div class="orb" id="orb"></div><div class="breath-text"><span class="ph" id="bphase">Breathe in</span><span class="big" id="bcount"></span></div></div>' +
       '<p class="hint" style="text-align:center" id="bleft"></p><div class="row"><button type="button" class="btn btn-quiet btn-wide" data-action="breath-stop">Stop</button></div></section></div>';
   }
   h += '<h1>Paced breathing</h1><section class="card"><p>Breathe in through your nose and out gently through your lips. Keep the breaths low and easy, with no need to take big ones. A longer breath out helps your body settle.</p>' +
@@ -791,16 +962,21 @@ function panelBreath(p){
 }
 function startBreathLoop(){
   var p = ui.panel, pace = PACES[p.pace], inMs = pace[0] * 1000, outMs = pace[1] * 1000, cyc = inMs + outMs, total = p.mins * 60000;
-  var orb = $('#orb'), ph = $('#bphase'), ct = $('#bcount'), left = $('#bleft');
+  var orb = $('#orb'), glow = $('#orbglow'), ph = $('#bphase'), ct = $('#bcount'), left = $('#bleft'), lastPhase = null;
   var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   try { if (navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request('screen').then(function(l){ timers.wl = l; }).catch(function(){}); } catch(e){}
+  /* The circle grows for the whole in-breath and shrinks for the whole out-breath: one smooth CSS transition per phase, timed to that phase. */
+  function setPhase(inh){
+    var dur = (inh ? inMs : outMs) / 1000, target = inh ? 1 : 0.55, glowT = inh ? 1.12 : 0.6;
+    [orb, glow].forEach(function(e, i){ if (!e) return; if (reduce) { e.style.transition = 'none'; e.style.transform = 'scale(' + (i ? 1.05 : 1) + ')'; return; } e.style.transition = 'transform ' + dur.toFixed(1) + 's cubic-bezier(.45,0,.55,1)'; e.style.transform = 'scale(' + (i ? glowT : target) + ')'; });
+  }
+  if (orb && !reduce) { orb.style.transition = 'none'; orb.style.transform = 'scale(0.55)'; if (glow) { glow.style.transition = 'none'; glow.style.transform = 'scale(0.6)'; } void orb.offsetWidth; }
   function tick(){
     var el = Date.now() - p.t0;
     if (el >= total) { finishBreath(true); return; }
-    var t = el % cyc, inh = t < inMs, sec, sc;
-    if (inh) { sec = Math.ceil((inMs - t) / 1000); sc = 0.55 + 0.45 * (t / inMs); }
-    else { sec = Math.ceil((outMs - (t - inMs)) / 1000); sc = 1 - 0.45 * ((t - inMs) / outMs); }
-    if (orb) orb.style.transform = 'scale(' + (reduce ? 1 : sc).toFixed(3) + ')';
+    var t = el % cyc, inh = t < inMs, sec;
+    if (inh) sec = Math.ceil((inMs - t) / 1000); else sec = Math.ceil((outMs - (t - inMs)) / 1000);
+    if (inh !== lastPhase) { lastPhase = inh; setPhase(inh); }
     var word = inh ? 'Breathe in' : 'Breathe out';
     if (ph && ph.textContent !== word) ph.textContent = word;
     if (ct) ct.textContent = sec;
@@ -843,6 +1019,53 @@ function panelPMR(p){
     '<h2>' + esc(g[0]) + '</h2><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">Tense for about 5 seconds, then release for 10 to 15 seconds. Keep breathing. Skip any area that hurts.</p>' +
     '<div class="row">' + (p.step > 0 ? '<button type="button" class="btn btn-quiet" data-action="pmr-prev">Back</button>' : '') +
     '<button type="button" class="btn btn-primary" data-action="pmr-next">' + (p.step === PMR.length - 1 ? 'Finish' : 'Next') + '</button></div></section></div>';
+}
+function panelScan(p){
+  var h = '<div class="stack">' + backBtn('panel-close', 'Back to tools');
+  if (p.step >= BODYSCAN.length) {
+    return h + panelAfter(p, '<h1>Scan complete</h1><p>Whatever you noticed is information, not a problem to solve. Naming it is the skill.</p>') +
+      '<div class="row"><button type="button" class="btn btn-primary" data-action="feel-new">Name the feeling</button><button type="button" class="btn btn-quiet" data-action="panel-close">Done</button></div></section></div>';
+  }
+  var g = BODYSCAN[p.step];
+  return h + '<section class="card"><div class="item-head"><span class="eyebrow">Body scan</span><span class="val">' + (p.step + 1) + ' of ' + BODYSCAN.length + '</span></div>' +
+    '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / BODYSCAN.length * 100) + '%"></span></div>' +
+    '<h2>' + esc(g[0]) + '</h2><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">Take two or three slow breaths here before moving on. There is no right thing to feel.</p>' +
+    '<div class="row">' + (p.step > 0 ? '<button type="button" class="btn btn-quiet" data-action="scan-prev">Back</button>' : '') +
+    '<button type="button" class="btn btn-primary" data-action="scan-next">' + (p.step === BODYSCAN.length - 1 ? 'Finish' : 'Next') + '</button></div></section></div>';
+}
+function panelUrges(p){
+  var h = '<div class="stack">' + backBtn('panel-close', 'Back to tools') + '<h1>Urges and opposite action</h1>' +
+    '<section class="card"><p class="hint">Every feeling comes with an urge. The urge is not wrong, but acting on it often keeps the feeling going. Opposite action means doing what the feeling does not want, gently, when the feeling does not fit the facts or is not helping.</p></section>';
+  FAMILIES.forEach(function(f){
+    var open = p.open === f.id;
+    h += '<section class="card"><button type="button" class="link" style="text-decoration:none; color:var(--fg); font-size:18px; width:100%; text-align:left" data-action="urges-open" data-id="' + f.id + '" aria-expanded="' + open + '">' + esc(f.name) + (open ? ' ▴' : ' ▾') + '</button>' +
+      (open ? '<p class="lbl">It pushes you to</p><ul class="prose" style="padding-left:22px">' + f.urges.map(function(u){ return '<li>' + esc(u) + '</li>'; }).join('') + '</ul><p class="lbl">What tends to help</p><ul class="prose" style="padding-left:22px">' + f.help.map(function(u){ return '<li>' + esc(u) + '</li>'; }).join('') + '</ul>' : '') + '</section>';
+  });
+  return h + '</div>';
+}
+function panelFeel(p){
+  var d = ui.draftFeel, s = ui.feelStep, fam = familyById(d.family), h = '<div class="stack">' + backBtn('feel-cancel', 'Cancel');
+  if (p.done) {
+    return h + '<section class="card card-good"><h1>Named and noted</h1><p>' + esc(fam ? fam.name : 'A feeling') + (d.word ? ', ' + esc(d.word.toLowerCase()) : '') + ', ' + d.intensity + ' out of 10. Saved to your feelings log.</p>' +
+      (d.action ? '<p><strong>Your next step:</strong> ' + esc(d.action) + '</p>' : '') +
+      '<div class="row">' + (d.family === 'afraid' || d.family === 'angry' ? '<button type="button" class="btn btn-primary" data-action="open-tool" data-type="breath">Paced breathing now</button>' : '') + '<button type="button" class="btn btn-quiet" data-action="panel-close">Done</button></div></section></div>';
+  }
+  h += '<section class="card"><div class="item-head"><h2>Name the feeling</h2><span class="val">Step ' + s + ' of 5</span></div><div class="bar" aria-hidden="true"><span style="width:' + (s * 20) + '%"></span></div>';
+  if (s === 1) {
+    h += '<p class="lbl">What is the closest family?</p><div class="feel-grid">' + FAMILIES.map(function(f){ return '<button type="button" class="feel-btn" aria-pressed="' + (d.family === f.id) + '" data-action="feel-family" data-id="' + f.id + '">' + esc(f.name) + '<small>' + esc(f.words.slice(0,3).join(', ').toLowerCase()) + '</small></button>'; }).join('') + '</div>';
+  } else if (s === 2) {
+    h += '<p class="lbl">Closer to which word?</p>' + radioGroup('feel','word',fam.words,d.word) + '<input type="text" id="f-wordOther" value="' + esc(fam.words.indexOf(d.word) > -1 ? '' : d.word) + '" placeholder="Or your own word" data-draft="feel" data-field="word" aria-label="Your own word">' +
+         '<div class="field"><div class="lbl-row"><span class="lbl">How strong is it?</span><span class="val">' + d.intensity + ' / 10</span></div>' + scaleButtons('feel','intensity',0,10,d.intensity,true) + '</div>';
+  } else if (s === 3) {
+    h += '<p class="lbl">Where is it in your body, and what does it feel like?</p><p class="hint">Pick anything that fits. In FND, spotting the body signal early is the warning sign you can act on.</p>' + chipGroup('feel','sensations',SENSATIONS,d.sensations);
+  } else if (s === 4) {
+    h += '<p class="lbl">What does it push you to do?</p>' + chipGroup('feel','urges',fam.urges,d.urges) + '<p class="hint">Urges are information. You do not have to follow them.</p>';
+  } else {
+    h += '<p class="lbl">What would help right now?</p>' + radioGroup('feel','action',fam.help,d.action) + textField('feel','note','Anything else?',d.note,2,'Optional');
+  }
+  h += '<div class="row">' + (s > 1 ? '<button type="button" class="btn btn-quiet" data-action="feel-back">Back</button>' : '') +
+       (s < 5 ? '<button type="button" class="btn btn-primary" data-action="feel-next"' + (s === 1 && !d.family ? ' disabled' : '') + '>Next</button>' : '<button type="button" class="btn btn-primary" data-action="feel-save">Save</button>') + '</div></section></div>';
+  return h;
 }
 function panelShift(p){
   var h = '<div class="stack">' + backBtn('panel-close', 'Back to tools') + '<h1>Shift your attention</h1>';
@@ -1091,6 +1314,8 @@ function buildCSVs(days){
   out.push({ name:'weekly-summary.csv', text: csv([['week_starting','recognised_warning_signs','shortened_or_stopped_episodes','overall_functioning_0_10','notes']].concat(wk.map(function(k){ var w = state.weeks[k]; return [k, w.signs, w.stopped, w.functioning == null ? '' : w.functioning, w.notes]; }))) });
   var th = state.thoughts.filter(function(t){ return inRange(t.ts, days); });
   out.push({ name:'thought-records.csv', text: csv([['date_time','situation','thought','emotions','feeling_before_pct','thinking_traps','evidence_for','evidence_against','balanced_thought','feeling_after_pct']].concat(th.map(function(t){ return [fmtISO(t.ts), t.situation, t.thought, t.emotions, t.before, t.traps, t.evFor, t.evAgainst, t.balanced, t.after]; }))) });
+  var fe = state.feelings.filter(function(f){ return inRange(f.ts, days); });
+  out.push({ name:'feelings-log.csv', text: csv([['date_time','feeling_family','feeling_word','intensity_0_10','body_sensations','urges','chosen_action','notes']].concat(fe.map(function(f){ var fam = familyById(f.family); return [fmtISO(f.ts), fam ? fam.name : f.family, f.word, f.intensity, f.sensations, f.urges, f.action, f.note]; }))) });
   var act = state.activity.filter(function(a){ return inRange(a.ts, days); });
   out.push({ name:'activity.csv', text: csv([['date_time','kind','label','minutes']].concat(act.map(function(a){ return [fmtISO(a.ts), a.kind, a.label, a.minutes]; }))) });
   var rows = [['session','homework','field','question','answer']];
@@ -1120,6 +1345,7 @@ function buildPDF(days){
   h1('Steady Ground report');
   p('Generated ' + new Date().toLocaleString() + '. ' + rangeLabel(days) + '.', 10);
   p('Self-reported entries from the Steady Ground app, for discussion with the care team. No name is attached; the sender should identify themselves in their message.', 10, 'italic');
+  if (state.profile.about) { h2('About me, in my words'); p(state.profile.about); }
 
   var eps = state.episodes.filter(function(e){ return inRange(e.ts, days); });
   h2('Summary');
@@ -1168,6 +1394,8 @@ function buildPDF(days){
 
   if (ck.length) { h2('Daily check-ins'); ck.sort().forEach(function(k){ var c = state.checkins[k]; p(fmtDay(k) + ': mood ' + (c.mood || '-') + ' / 5, energy ' + (c.energy || '-') + ' / 5'); }); }
 
+  var fe = state.feelings.filter(function(f){ return inRange(f.ts, days); });
+  if (fe.length) { h2('Feelings log'); fe.slice().sort(function(a,b){ return a.ts - b.ts; }).forEach(function(f){ var fam = familyById(f.family); h3(fmtWhen(f.ts) + ' — ' + (fam ? fam.name : '') + (f.word ? ', ' + f.word.toLowerCase() : '') + ' (' + f.intensity + '/10)'); kv('In the body', f.sensations); kv('Urge', f.urges); kv('Chose', f.action); kv('Notes', f.note); }); }
   var th = state.thoughts.filter(function(t){ return inRange(t.ts, days); });
   if (th.length) { h2('Thought records'); th.slice().sort(function(a,b){ return a.ts - b.ts; }).forEach(function(t){ h3(fmtWhen(t.ts)); kv('Situation', t.situation); kv('Thought', t.thought); kv('Feelings', t.emotions); kv('Feeling strength before', t.before + '%'); kv('Thinking traps', t.traps); kv('Supports the thought', t.evFor); kv('Does not fit', t.evAgainst); kv('Fairer thought', t.balanced); kv('Feeling strength after', t.after + '%'); }); }
 
@@ -1227,6 +1455,9 @@ function importBackup(file){
       mergeList(state.grounding, d.grounding); state.grounding.sort(function(a,b){ return b.ts - a.ts; });
       mergeList(state.thoughts, d.thoughts); state.thoughts.sort(function(a,b){ return b.ts - a.ts; });
       mergeList(state.goals, d.goals); mergeList(state.activity, d.activity);
+      mergeList(state.feelings, d.feelings); state.feelings.sort(function(a,b){ return b.ts - a.ts; });
+      for (k in d.profile) if (!state.profile[k] && d.profile[k]) state.profile[k] = d.profile[k];
+      for (k in d.badges) if (!state.badges[k]) state.badges[k] = d.badges[k];
       var k;
       for (k in d.checkins) if (!state.checkins[k]) { state.checkins[k] = d.checkins[k]; added++; }
       for (k in d.weeks) if (!state.weeks[k]) { state.weeks[k] = d.weeks[k]; added++; }
@@ -1254,7 +1485,8 @@ function render(){
     checkMilestones();
     if (tabs) tabs.hidden = false; if (header) header.hidden = false;
     if (ui.tab === 'today') h = viewToday();
-    else if (ui.tab === 'milestones') h = viewMilestones();
+    else if (ui.tab === 'progress') h = viewProgress();
+    else if (ui.tab === 'me') h = viewMe();
     else if (ui.tab === 'track') h = viewTrack();
     else if (ui.tab === 'tools') h = viewTools();
     else if (ui.tab === 'course') h = viewCourse();
@@ -1265,8 +1497,10 @@ function render(){
     if (ui.celebrate.length) h += viewCelebration();
   }
   v.innerHTML = h;
+  applyColour();
+  var navTab = ({ plan:'today', export:'me', settings:'me' })[ui.tab] || ui.tab;
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){
-    if (b.getAttribute('data-tab') === ui.tab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+    if (b.getAttribute('data-tab') === navTab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   if (ui.scrollTop) { try { window.scrollTo(0, 0); } catch(e){} ui.scrollTop = false; }
   if (ui.refocus) { var f = $(ui.refocus); if (f) { try { f.focus({preventScroll:true}); } catch(e){} } ui.refocus = null; }
@@ -1282,6 +1516,7 @@ function openTool(type){
   if (type === 'breath') ui.panel = {type:'breath', pace:'4-6', mins:3, running:false, done:false};
   else if (type === 'ground') ui.panel = {type:'ground', step:0};
   else if (type === 'pmr') ui.panel = {type:'pmr', step:0};
+  else if (type === 'scan') { ui.sub.tools = 'feel'; ui.panel = {type:'scan', step:0}; }
   else if (type === 'shift') ui.panel = {type:'shift', i: Math.floor(Math.random() * SHIFTS.length), done:false};
   render();
 }
@@ -1292,13 +1527,15 @@ function draftFor(name){
   if (name === 'th') return ui.draftTh;
   if (name === 'gr') return ui.draftGr;
   if (name === 'goal') return ui.draftGoal;
+  if (name === 'feel') return ui.draftFeel;
+  if (name === 'profile') return state.profile;
   if (name === 'flare') return state.flare;
   if (name === 'course') return state.course.answers;
   if (name === 'week') { var k = weekKey(new Date()); state.weeks[k] = state.weeks[k] || {}; return state.weeks[k]; }
   if (name === 'panel') return ui.panel;
   return null;
 }
-function persistent(name){ return name === 'flare' || name === 'course' || name === 'week'; }
+function persistent(name){ return name === 'flare' || name === 'course' || name === 'week' || name === 'profile'; }
 function byId(list, id){ return list.filter(function(x){ return x.id === id; })[0]; }
 var A = {
   tab: function(el){ go(el.getAttribute('data-tab')); },
@@ -1309,7 +1546,10 @@ var A = {
   'goto-today': function(){ go('today'); },
   'goto-export': function(){ ui.exp.links = null; go('export'); },
   'goto-settings': function(){ ui.importMsg = ''; ui.confirmClear = false; ui.remindLinks = null; go('settings'); },
-  'goto-milestones': function(){ ui.celebrate = []; go('milestones'); },
+  'goto-milestones': function(){ ui.celebrate = []; go('progress', {progress:'milestones'}); },
+  'goto-plan-pacing': function(){ go('plan', {plan:'pacing'}); },
+  'goto-plan-flare': function(){ go('plan', {plan:'flare'}); },
+  colour: function(el){ state.profile.colour = el.getAttribute('data-val'); save(); ui.refocus = '[data-action="colour"][data-val="' + state.profile.colour + '"]'; render(); },
   'cel-next': function(){ ui.celebrate.shift(); render(); },
   'wb-dismiss': function(){ ui.welcomeBack = false; render(); },
   'text-size': function(el){ state.prefs.textSize = el.getAttribute('data-val'); save(); render(); },
@@ -1323,7 +1563,7 @@ var A = {
   'welcome-pick': function(el){ ui.welcomeMode = el.getAttribute('data-val'); render(); },
   'welcome-go': function(){
     if (!ui.welcomeMode) return;
-    state.setup.done = true; state.setup.mode = ui.welcomeMode; save();
+    state.setup.done = true; state.setup.mode = ui.welcomeMode; if (!state.profile.joined) state.profile.joined = Date.now(); save();
     if (ui.welcomeMode === 'course' && sessions().length) { ui.tab = 'course'; ui.session = 1; ui.hw = null; }
     else ui.tab = 'today';
     ui.scrollTop = true; render();
@@ -1374,7 +1614,7 @@ var A = {
     state.episodes.push({ id: uid(), ts: ts, types: d.types.slice(), severity: d.severity || 0, duration: d.duration === '' ? null : Math.max(0, +d.duration || 0), durUnit: d.durUnit, description: (d.description || '').trim(), location: (d.location || '').trim(),
       triggers: d.triggers.slice(), triggerText: (d.triggerText || '').trim(), warnings: d.warnings.slice(), warningText: (d.warningText || '').trim(), helped: d.helped.slice(), helpedText: (d.helpedText || '').trim(), impactDay: (d.impactDay || '').trim(), impactOthers: (d.impactOthers || '').trim() });
     state.episodes.sort(function(a, b){ return b.ts - a.ts; });
-    ui.draftEp = null; save(); toast('Episode saved'); ui.scrollTop = true; render();
+    ui.draftEp = null; save(); fxTick('Episode saved'); ui.scrollTop = true; render();
   },
   'ep-del': function(el){
     var id = el.getAttribute('data-id');
@@ -1388,7 +1628,7 @@ var A = {
     var d = ui.draftGr, ts = new Date(d.when).getTime(); if (isNaN(ts)) ts = Date.now();
     state.grounding.push({ id: uid(), ts: ts, skill: d.skill, before: d.before, after: d.after, minutes: 0, note: (d.note || '').trim() });
     state.grounding.sort(function(a,b){ return b.ts - a.ts; });
-    ui.draftGr = null; save(); toast('Record saved'); render();
+    ui.draftGr = null; save(); fxTick('Record saved'); render();
   },
   'gr-del': function(el){
     var id = el.getAttribute('data-id');
@@ -1407,7 +1647,7 @@ var A = {
   'th-save': function(){
     var d = ui.draftTh;
     state.thoughts.unshift({ id: uid(), ts: Date.now(), situation: (d.situation || '').trim(), thought: (d.thought || '').trim(), emotions: d.emotions.slice(), before: +d.before, traps: d.traps.slice(), evFor: (d.evFor || '').trim(), evAgainst: (d.evAgainst || '').trim(), balanced: (d.balanced || '').trim(), after: +d.after });
-    ui.draftTh = null; ui.thStep = 1; save(); toast('Thought record saved'); ui.scrollTop = true; render();
+    ui.draftTh = null; ui.thStep = 1; save(); fxTick('Thought record saved'); ui.scrollTop = true; render();
   },
   'th-del': function(el){
     var id = el.getAttribute('data-id');
@@ -1420,7 +1660,31 @@ var A = {
   panel: function(el){
     var t = el.getAttribute('data-type');
     if (t === 'move') { ui.panel = {type:'move', id: el.getAttribute('data-id'), exRunning:false, exEnd:0, before:-1}; ui.scrollTop = true; render(); }
+    else if (t === 'urges') { ui.panel = {type:'urges', open:'', before:-1}; ui.scrollTop = true; render(); }
     else openTool(t);
+  },
+  'urges-open': function(el){ var id = el.getAttribute('data-id'); ui.panel.open = ui.panel.open === id ? '' : id; ui.refocus = '[data-action="urges-open"][data-id="' + id + '"]'; render(); },
+  'scan-next': function(){
+    var p = ui.panel; p.step++;
+    if (p.step >= BODYSCAN.length) { p.after = -1; p.minutesDone = 3; if (p.before < 0) saveGrounding(p, 3); }
+    render();
+  },
+  'scan-prev': function(){ ui.panel.step = Math.max(0, ui.panel.step - 1); render(); },
+  'feel-new': function(){ ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.lesson = null; ui.session = null; ui.hw = null; ui.draftFeel = newFeel(); ui.feelStep = 1; ui.panel = {type:'feel', before:-1, done:false}; ui.scrollTop = true; render(); },
+  'feel-cancel': function(){ ui.draftFeel = null; ui.panel = null; ui.scrollTop = true; render(); },
+  'feel-family': function(el){ ui.draftFeel.family = el.getAttribute('data-id'); ui.draftFeel.word = ''; ui.draftFeel.urges = []; ui.draftFeel.action = ''; ui.refocus = '[data-action="feel-family"][data-id="' + ui.draftFeel.family + '"]'; render(); },
+  'feel-next': function(){ if (ui.feelStep === 1 && !ui.draftFeel.family) return; ui.feelStep = Math.min(5, ui.feelStep + 1); ui.scrollTop = true; render(); },
+  'feel-back': function(){ ui.feelStep = Math.max(1, ui.feelStep - 1); ui.scrollTop = true; render(); },
+  'feel-save': function(){
+    var d = ui.draftFeel;
+    state.feelings.unshift({ id: uid(), ts: Date.now(), family: d.family, word: (d.word || '').trim(), intensity: +d.intensity, sensations: d.sensations.slice(), urges: d.urges.slice(), action: d.action, note: (d.note || '').trim() });
+    save(); ui.panel.done = true; fxTick('Feeling saved'); render();
+  },
+  'feel-del': function(el){
+    var id = el.getAttribute('data-id');
+    if (ui.confirmDel === 'feel:' + id) { state.feelings = state.feelings.filter(function(f){ return f.id !== id; }); ui.confirmDel = null; save(); toast('Deleted'); }
+    else ui.confirmDel = 'feel:' + id;
+    render();
   },
   'before-skip': function(){ ui.panel.before = -1; render(); },
   'panel-close': function(){ ui.panel = null; ui.scrollTop = true; render(); },
@@ -1453,7 +1717,7 @@ var A = {
   'ex-done': function(){
     var x = findEx(ui.panel.id);
     logActivity({ kind:'move', minutes:x.mins, label:x.name });
-    ui.panel = null; ui.scrollTop = true; toast('Logged ' + x.mins + ' min of movement'); render();
+    ui.panel = null; ui.scrollTop = true; fxTick('Logged ' + x.mins + ' min of movement'); render();
   },
 
   'goal-new': function(){ ui.goalForm = true; ui.draftGoal = newGoal(); render(); },
@@ -1468,7 +1732,10 @@ var A = {
   },
   'goal-add': function(el){
     var g = byId(state.goals, el.getAttribute('data-id')); if (!g) return;
-    var m = +el.getAttribute('data-min'); logActivity({ kind:'goal', goalId:g.id, minutes:m, label:g.name }); toast('Added ' + m + ' min'); render();
+    var k = dayKey(new Date()), was = goalMins(g, k) >= g.target;
+    var m = +el.getAttribute('data-min'); logActivity({ kind:'goal', goalId:g.id, minutes:m, label:g.name });
+    if (!was && goalMins(g, k) >= g.target) fxTick('Steady amount reached'); else toast('Added ' + m + ' min');
+    render();
   },
   'goal-undo': function(el){
     var id = el.getAttribute('data-id'), k = dayKey(new Date());
@@ -1500,9 +1767,9 @@ var A = {
     save(); render(); var n = $('#planText'); if (n) n.focus();
   },
   'plan-toggle': function(el){
-    var k = dayKey(new Date()), id = el.getAttribute('data-id');
-    (state.plan[k] || []).forEach(function(i){ if (i.id === id) i.done = !i.done; });
-    save(); ui.refocus = '[data-action="plan-toggle"][data-id="' + id + '"]'; render();
+    var k = dayKey(new Date()), id = el.getAttribute('data-id'), nowDone = false;
+    (state.plan[k] || []).forEach(function(i){ if (i.id === id) { i.done = !i.done; nowDone = i.done; } });
+    save(); if (nowDone) fxTick(); ui.refocus = '[data-action="plan-toggle"][data-id="' + id + '"]'; render();
   },
   'plan-del': function(el){
     var k = dayKey(new Date()), id = el.getAttribute('data-id');
@@ -1514,17 +1781,17 @@ var A = {
     var day = el.getAttribute('data-day'); if (day != null) { var s = findSession(ui.session); if (s) s.homework.forEach(function(h, i){ if (String(h.day) === day && ui.hw === null) ui.hw = i; }); }
     ui.scrollTop = true; render(); },
   'course-close': function(){ ui.session = null; ui.hw = null; ui.scrollTop = true; render(); },
-  'session-read': function(el){ var n = el.getAttribute('data-n'); state.course.read[n] = !state.course.read[n]; save(); render(); },
+  'session-read': function(el){ var n = el.getAttribute('data-n'); state.course.read[n] = !state.course.read[n]; save(); if (state.course.read[n]) fxTick('Session read'); render(); },
   'hw-open': function(el){ ui.tab = 'course'; ui.session = +el.getAttribute('data-n'); ui.hw = +el.getAttribute('data-i'); ui.scrollTop = true; render(); },
   'hw-close': function(){ ui.hw = null; ui.scrollTop = true; render(); },
   'hw-done': function(el){
     var s = findSession(el.getAttribute('data-n')), h = s && s.homework[+el.getAttribute('data-i')]; if (!h) return;
     var k = hwKey(s, h); if (state.course.done[k]) delete state.course.done[k]; else state.course.done[k] = Date.now();
-    save(); toast(state.course.done[k] ? 'Homework marked done' : 'Marked as not done'); render();
+    save(); if (state.course.done[k]) fxTick('Homework done'); else toast('Marked as not done'); render();
   },
   'lesson-open': function(el){ ui.tab = 'course'; ui.lesson = el.getAttribute('data-id'); ui.panel = null; ui.scrollTop = true; render(); },
   'lesson-close': function(){ ui.lesson = null; ui.scrollTop = true; render(); },
-  'lesson-read': function(el){ var id = el.getAttribute('data-id'); state.read[id] = !state.read[id]; save(); render(); },
+  'lesson-read': function(el){ var id = el.getAttribute('data-id'); state.read[id] = !state.read[id]; save(); if (state.read[id]) fxTick(); render(); },
 
   'exp-range': function(el){ ui.exp.range = +el.getAttribute('data-val'); ui.exp.links = null; render(); },
   'exp-toggle': function(el){ var k = el.getAttribute('data-key'); ui.exp[k] = !ui.exp[k]; ui.exp.links = null; render(); },
@@ -1557,6 +1824,7 @@ document.addEventListener('input', function(e){
   if (!name) return;
   var d = draftFor(name), f = t.getAttribute('data-field'); if (!d || !f) return;
   d[f] = t.type === 'range' ? +t.value : t.value;
+  if (name === 'profile' && f === 'team') state.flare.contacts = t.value;
   if (t.type === 'range') { var out = $('[data-out="' + f + '"]'); if (out) out.textContent = t.value + (t.getAttribute('data-suffix') || ''); }
   if (persistent(name)) saveSoon();
 });

@@ -30,10 +30,11 @@ That address is what you give patients. Nobody can see patient data through it; 
 
 ### Updating the app later
 
-Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v3` to `steady-ground-v4` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v5` to `steady-ground-v6` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
 
 ## Engagement features (version 3)
 
+- **Task celebration.** Every completed task (a practice, a logged episode, a thought record, a movement exercise, homework marked done, a session read, a plan item ticked, a pacing target reached) shows a brief green checkmark with a gentle confetti burst, then clears itself. Respects reduced-motion (a quiet static tick, no motion) for patients with visual sensitivity.
 - **Milestones.** 26 milestones across calming practice, tracking, course, movement, planning and sharing. Reached milestones pop up as a short celebration card; all of them are listed under Today, then Milestones. Wording is deliberately non-punitive: a missed day is never called a broken streak.
 - **Practice ring.** The Today screen shows how many of the last 7 days had a calming practice, the total count, and the current run.
 - **After-practice feedback.** Every calming tool ends with the practice count, the before/after stress change, and a short encouraging line.
@@ -43,6 +44,15 @@ Upload the changed files again (same names) and commit. Then open `sw.js` and ch
 - **Large text** option in Settings.
 
 Edit the milestone list (`BADGES`) and encouragement lines (`ENCOURAGE`) near the top of `app.js` to change these.
+
+## Version 5: tabs, feelings, profile
+
+- **Six tabs:** Today, Track, Tools, Course, Progress, Me. Plan (pacing, today's plan, flare plan) is reached from Today and from Me.
+- **Track** is for logging only: episodes, grounding records, thought records, feelings.
+- **Progress** holds the two-week trends, an eight-week symptom progression (episodes per week, average severity, practices per week, weekly functioning), milestones, and a day-by-day timeline of everything completed.
+- **Tools, Feel:** "Name the feeling" (core feeling, specific word, intensity, body sensations, urge, helpful action), a seven-stop body scan, and an urges-and-opposite-action reference. Vocabulary is original; the Braman emotion wheels are copyrighted and are not reproduced in the app.
+- **Me:** name, accent colour, recent milestones and practice ring, "the version of me I am working toward", about me (included in the clinic report), care team, links to plans and settings.
+- **Paced breathing** circle now grows for the whole in-breath and shrinks for the whole out-breath in one smooth motion.
 
 ## Installing on an iPhone
 
