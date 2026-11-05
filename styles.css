@@ -70,7 +70,7 @@ h3{font-size:18px; line-height:1.3; font-weight:600}
 .brand-sub{font-size:14px; color:var(--muted)}
 .top{justify-content:space-between}
 .top-left{display:flex; align-items:center; gap:12px; min-width:0}
-.gear{width:44px; height:44px; flex:none; border-radius:12px; border:1px solid var(--line); background:var(--surface); color:var(--fg); cursor:pointer; display:grid; place-items:center}
+.gear{min-width:44px; height:44px; flex:none; border-radius:12px; border:1px solid var(--line); background:var(--surface); color:var(--fg); cursor:pointer; display:inline-flex; align-items:center; gap:6px; padding:0 12px; font:inherit; font-size:15px; font-weight:600}
 .gear svg{width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
 .stack{display:flex; flex-direction:column; gap:16px}
 .stack-s{display:flex; flex-direction:column; gap:10px}
@@ -97,7 +97,7 @@ button:focus-visible,input:focus-visible,textarea:focus-visible,select:focus-vis
 .lbl{font-weight:700}
 .lbl-row{display:flex; justify-content:space-between; align-items:baseline; gap:12px}
 .val{color:var(--muted); font-weight:700; font-variant-numeric:tabular-nums}
-.anchors{display:flex; justify-content:space-between; font-size:13px; color:var(--muted)}
+.anchors{display:flex; justify-content:space-between; font-size:14px; color:var(--muted)}
 input[type="text"],input[type="number"],input[type="datetime-local"],input[type="date"],textarea,select{font:inherit; color:var(--fg); background:var(--bg); border:1.5px solid var(--line); border-radius:12px; padding:12px 14px; min-height:48px; width:100%; min-width:0}
 textarea{min-height:96px; resize:vertical}
 input[type="range"]{width:100%; height:32px; accent-color:var(--accent)}
@@ -126,7 +126,7 @@ input[type="range"]{width:100%; height:32px; accent-color:var(--accent)}
 .bar{display:block; width:100%; height:10px; background:var(--surface-2); border-radius:999px; overflow:hidden}
 .bar span{display:block; height:100%; background:var(--accent); border-radius:999px}
 .dots{display:flex; gap:8px}
-.dotcol{display:flex; flex-direction:column; align-items:center; gap:2px; font-size:12px; color:var(--muted)}
+.dotcol{display:flex; flex-direction:column; align-items:center; gap:2px; font-size:13px; color:var(--muted)}
 .dot{width:22px; height:22px; border-radius:50%; border:2px solid var(--line)}
 .dot-on{background:var(--good); border-color:var(--good)}
 .check{width:44px; height:44px; flex:none; border-radius:12px; border:2px solid var(--line); background:var(--surface); color:var(--accent-fg); cursor:pointer; font:inherit; font-weight:700; font-size:20px}
@@ -136,7 +136,7 @@ input[type="range"]{width:100%; height:32px; accent-color:var(--accent)}
 .x{width:44px; height:44px; flex:none; border:0; background:none; font:inherit; font-size:22px; color:var(--muted); cursor:pointer}
 .chart{width:100%; height:auto; display:block}
 .chart .grid{stroke:var(--line); stroke-width:1}
-.chart .ax{fill:var(--muted); font-size:11px; font-family:var(--font-body)}
+.chart .ax{fill:var(--muted); font-size:12px; font-family:var(--font-body)}
 .chart .barr{fill:var(--accent)}
 .chart .ln1{stroke:var(--accent); fill:none; stroke-width:2.5}
 .chart .ln2{stroke:var(--series2); fill:none; stroke-width:2.5; stroke-dasharray:6 4}
@@ -174,7 +174,7 @@ input[type="range"]{width:100%; height:32px; accent-color:var(--accent)}
 .sess-body{flex:1; min-width:0; display:flex; flex-direction:column; gap:4px}
 .tabs{position:fixed; left:0; right:0; bottom:0; z-index:20; background:var(--surface); border-top:1px solid var(--line); padding:6px max(8px, env(safe-area-inset-right, 0px)) env(safe-area-inset-bottom, 0px) max(8px, env(safe-area-inset-left, 0px))}
 .tabs-in{max-width:560px; margin:0 auto; display:grid; grid-template-columns:repeat(4,1fr); gap:4px}
-.tab{font:inherit; font-size:13px; font-weight:600; border:0; background:transparent; color:var(--muted); min-height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; border-radius:12px; cursor:pointer; padding:0 2px}
+.tab{font:inherit; font-size:14px; font-weight:600; border:0; background:transparent; color:var(--muted); min-height:56px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; border-radius:12px; cursor:pointer; padding:0 2px}
 .tab[aria-current="page"]{color:var(--accent); background:var(--accent-soft)}
 .tab svg{width:24px; height:24px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
 .avatar{width:72px; height:72px; border-radius:50%; background:var(--accent); color:var(--accent-fg); display:grid; place-items:center; font-family:var(--font-display); font-size:30px; font-weight:600; flex:none}
@@ -183,7 +183,7 @@ input[type="range"]{width:100%; height:32px; accent-color:var(--accent)}
 .swatch[aria-pressed="true"]{border-color:var(--fg)}
 .feel-grid{display:grid; grid-template-columns:repeat(2,1fr); gap:10px}
 .feel-btn{font:inherit; min-height:64px; border-radius:14px; border:1.5px solid var(--line); background:var(--surface); color:var(--fg); cursor:pointer; font-weight:700; font-size:18px; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px}
-.feel-btn small{font-weight:400; font-size:13px; color:var(--muted)}
+.feel-btn small{font-weight:400; font-size:14px; color:var(--muted)}
 .feel-btn[aria-pressed="true"]{background:var(--accent-soft); border-color:var(--accent)}
 .timeline{list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:14px}
 .tl-day{display:flex; flex-direction:column; gap:6px}
@@ -196,7 +196,7 @@ input[type="range"]{width:100%; height:32px; accent-color:var(--accent)}
 .orb-glow{position:absolute; width:260px; height:260px; border-radius:50%; background:var(--accent-soft); opacity:.5; transform:scale(.55)}
 .toast{position:fixed; left:50%; transform:translateX(-50%); bottom:calc(84px + env(safe-area-inset-bottom, 0px)); background:var(--fg); color:var(--bg); padding:10px 16px; border-radius:12px; z-index:30; max-width:calc(100% - 32px); opacity:0; pointer-events:none; transition:opacity .2s; text-align:center}
 .toast-on{opacity:1}
-.badge{display:inline-block; font-size:12px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; padding:3px 10px; border-radius:999px; background:var(--warn-soft); color:var(--fg)}
+.badge{display:inline-block; font-size:14px; font-weight:700; padding:3px 10px; border-radius:999px; background:var(--warn-soft); color:var(--fg)}
 .empty{display:flex; flex-direction:column; gap:12px; align-items:flex-start}
 dl.defs{margin:0; display:flex; flex-direction:column; gap:6px; font-size:15px; color:var(--muted)}
 dl.defs dt{font-weight:700; color:var(--fg)}
@@ -215,7 +215,7 @@ html.text-large .btn,html.text-large .chip{min-height:52px}
 html.text-larger body{font-size:22px}
 html.text-larger .btn,html.text-larger .chip{min-height:56px}
 html.text-larger h1{font-size:32px}
-html.calm-ui *{transition:none !important; animation:none !important}
+html.calm-ui *:not(.orb){transition:none !important; animation:none !important}
 html.calm-ui .orb-glow{display:none}
 .ring{position:relative; width:96px; height:96px; flex:none}
 .ring svg{width:96px; height:96px; transform:rotate(-90deg)}
@@ -223,7 +223,7 @@ html.calm-ui .orb-glow{display:none}
 .ring-fg{fill:none; stroke:var(--good); stroke-width:8; stroke-linecap:round; transition:stroke-dashoffset .6s ease}
 .ring-txt{position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; line-height:1}
 .ring-big{font-family:var(--font-display); font-size:22px; font-weight:600; font-variant-numeric:tabular-nums}
-.ring-sub{font-size:11px; color:var(--muted); margin-top:3px}
+.ring-sub{font-size:13px; color:var(--muted); margin-top:3px}
 .medal{width:48px; height:48px; flex:none; border-radius:50%; display:grid; place-items:center; background:var(--surface-2); color:var(--muted)}
 .medal svg{width:26px; height:26px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
 .badge-tile.on .medal,.cel-card .medal{background:var(--accent); color:var(--accent-fg)}

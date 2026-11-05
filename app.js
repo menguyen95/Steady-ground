@@ -35,6 +35,27 @@ function mergeInto(p){
 var saveTimer = null;
 function save(){ if (!canStore) return; try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} }
 function saveSoon(){ clearTimeout(saveTimer); saveTimer = setTimeout(save, 300); }
+/* Where the patient was: the open tab, session, homework and any half-filled form are kept on the phone,
+   so closing the app mid-task loses nothing and it reopens on the same screen. Timed exercises are not resumed. */
+var UI_KEY = 'steady-ground-where';
+var UI_KEEP = ['tab','sub','session','hw','lesson','goalDetail','fullTeach','draftEp','draftTh','thStep','draftFeel','feelStep','draftGr','draftFgoal','fgoalForm','draftAttempt','draftGoal','goalForm','patternSel','reflectOpen','planKind','setupStep','welcomeMode','draftSetup'];
+function saveUi(){
+  if (!canStore) return;
+  try { var o = {}; UI_KEEP.forEach(function(k){ o[k] = ui[k]; }); localStorage.setItem(UI_KEY, JSON.stringify(o)); } catch(e){}
+}
+var uiTimer = null;
+function saveUiSoon(){ clearTimeout(uiTimer); uiTimer = setTimeout(saveUi, 300); }
+function restoreUi(){
+  if (!canStore) return;
+  try {
+    var raw = localStorage.getItem(UI_KEY); if (!raw) return;
+    var o = JSON.parse(raw), keys = state.setup.done ? UI_KEEP : ['setupStep','welcomeMode','draftSetup'];
+    keys.forEach(function(k){ if (o[k] !== undefined && o[k] !== null) { if (k === 'sub') { for (var kk in o.sub) ui.sub[kk] = o.sub[kk]; } else ui[k] = o[k]; } });
+    if (ui.draftFeel) { ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.panel = {type:'feel', before:-1, done:false}; }
+    /* Short-lived screens (the toolkit, a pattern check, sharing, settings) reopen on Home instead. */
+    if (['today','path','tools','progress','me','course','plan','track'].indexOf(ui.tab) < 0) ui.tab = 'today';
+  } catch(e){}
+}
 
 /* ---------- helpers ---------- */
 function $(s, r){ return (r || document).querySelector(s); }
@@ -725,8 +746,8 @@ function viewToday(){
   h += '<section><p class="eyebrow">Your recovery space</p><h2 style="font-size:24px">What would help you today?</h2></section>' +
        '<div class="stack-s">' +
        '<button type="button" class="tool-btn door" data-action="goto-toolkit"><span class="t">I need help right now<span class="meta">A strategy that fits how your FND shows up</span></span>' + chev + '</button>' +
-       '<button type="button" class="tool-btn door door-soft" data-action="quick-two"><span class="t">I have two minutes<span class="meta">Paced breathing, two minutes, then carry on</span></span>' + chev + '</button>' +
-       '<button type="button" class="tool-btn door door-soft" data-action="' + (g ? 'fgoal-open" data-id="' + g.id : 'goto-plan-goals') + '"><span class="t">I want to take a step<span class="meta">' + esc(g ? (ns ? 'Next: ' + ns.text : g.name) : 'Choose a real-world goal and break it into steps') + '</span></span>' + chev + '</button>' +
+       '<button type="button" class="tool-btn door door-soft" data-action="quick-two"><span class="t">I have 2 minutes<span class="meta">Paced breathing, two minutes, then carry on</span></span>' + chev + '</button>' +
+       '<button type="button" class="tool-btn door door-soft" data-action="goto-tools"><span class="t">I want to practise<span class="meta">Calming skills, feelings and gentle movement, at your own pace</span></span>' + chev + '</button>' +
        '</div>';
   var pinned = state.pins.map(function(k){ return pinInfo(k); }).filter(Boolean);
   if (pinned.length) h += '<section><p class="eyebrow">Your pinned tools</p><div class="chips">' + pinned.map(function(t){ return '<button type="button" class="chip" data-action="' + t.action + '"' + t.attrs + '>' + esc(t.label) + '</button>'; }).join('') + '</div></section>';
@@ -743,6 +764,7 @@ function viewToday(){
          (ns ? '<p><strong>Next step:</strong> ' + esc(ns.text) + '</p><div class="row"><button type="button" class="btn btn-primary" data-action="attempt-new" data-goal="' + g.id + '">I tried it</button><button type="button" class="btn btn-quiet" data-action="fgoal-open" data-id="' + g.id + '">Open goal</button></div>' : '<div><button type="button" class="btn" data-action="fgoal-open" data-id="' + g.id + '">Open goal</button></div>') + '</section>';
   }
 
+  if (!g) h += '<section class="card"><p class="eyebrow">Real-world goal</p><p>Something you have been avoiding or want back, broken into small steps.</p><div><button type="button" class="btn" data-action="goto-plan-goals">Set a goal</button></div></section>';
   h += '<section class="card"><h2>This week</h2>' + weekFeedback().map(function(l){ return '<p>' + esc(l) + '</p>'; }).join('') + '<div><button type="button" class="link" data-action="goto-progress">See my progress</button></div></section>';
 
   var items = state.plan[k] || [], done = items.filter(function(i){ return i.done; }).length;
@@ -1167,7 +1189,7 @@ function panelGround(p){
   var g = GROUND[p.step];
   return h + '<section class="card"><div class="item-head"><span class="eyebrow">5-4-3-2-1 grounding</span><span class="val">Step ' + (p.step + 1) + ' of 5</span></div>' +
     '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / 5 * 100) + '%"></span></div>' +
-    '<p class="bigtext">' + esc(g[1]) + '</p><p class="hint">' + esc(g[2]) + '</p>' +
+    '<div id="stepText"><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">' + esc(g[2]) + '</p></div>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +
     '<div class="row">' + (p.step > 0 ? '<button type="button" class="btn btn-quiet" data-action="ground-prev">Back</button>' : '') +
     '<button type="button" class="btn btn-primary" data-action="ground-next">' + (p.step === GROUND.length - 1 ? 'Finish' : 'Next') + '</button></div></section></div>';
 }
@@ -1180,7 +1202,7 @@ function panelPMR(p){
   var g = PMR[p.step];
   return h + '<section class="card"><div class="item-head"><span class="eyebrow">Progressive muscle relaxation</span><span class="val">' + (p.step + 1) + ' of ' + PMR.length + '</span></div>' +
     '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / PMR.length * 100) + '%"></span></div>' +
-    '<h2>' + esc(g[0]) + '</h2><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">Tense for about 5 seconds, then release for 10 to 15 seconds. Keep breathing. Skip any area that hurts.</p>' +
+    '<div id="stepText"><h2>' + esc(g[0]) + '</h2><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">Tense for about 5 seconds, then release for 10 to 15 seconds. Keep breathing. Skip any area that hurts.</p></div>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +
     '<div class="row">' + (p.step > 0 ? '<button type="button" class="btn btn-quiet" data-action="pmr-prev">Back</button>' : '') +
     '<button type="button" class="btn btn-primary" data-action="pmr-next">' + (p.step === PMR.length - 1 ? 'Finish' : 'Next') + '</button></div></section></div>';
 }
@@ -1193,7 +1215,7 @@ function panelScan(p){
   var g = BODYSCAN[p.step];
   return h + '<section class="card"><div class="item-head"><span class="eyebrow">Body scan</span><span class="val">' + (p.step + 1) + ' of ' + BODYSCAN.length + '</span></div>' +
     '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / BODYSCAN.length * 100) + '%"></span></div>' +
-    '<h2>' + esc(g[0]) + '</h2><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">Take two or three slow breaths here before moving on. There is no right thing to feel.</p>' +
+    '<div id="stepText"><h2>' + esc(g[0]) + '</h2><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">Take two or three slow breaths here before moving on. There is no right thing to feel.</p></div>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +
     '<div class="row">' + (p.step > 0 ? '<button type="button" class="btn btn-quiet" data-action="scan-prev">Back</button>' : '') +
     '<button type="button" class="btn btn-primary" data-action="scan-next">' + (p.step === BODYSCAN.length - 1 ? 'Finish' : 'Next') + '</button></div></section></div>';
 }
@@ -1237,14 +1259,14 @@ function panelShift(p){
     return h + panelAfter(p, '<p>Nicely done.</p>') + '<div class="row"><button type="button" class="btn btn-quiet" data-action="panel-close">Done</button></div></section></div>';
   }
   return h + '<section class="card"><p class="hint">When symptoms flare, watching them closely can keep them going. Giving your mind a job can help. This is not about ignoring how you feel. It is a way to let your system settle.</p>' +
-    '<p class="bigtext">' + esc(SHIFTS[p.i]) + '</p><div class="row"><button type="button" class="btn" data-action="shift-next">Another idea</button><button type="button" class="btn btn-primary" data-action="shift-done">I did it</button></div></section></div>';
+    '<p class="bigtext" id="stepText">' + esc(SHIFTS[p.i]) + '</p>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +'<div class="row"><button type="button" class="btn" data-action="shift-next">Another idea</button><button type="button" class="btn btn-primary" data-action="shift-done">I did it</button></div></section></div>';
 }
 function findEx(id){ return EXERCISES.filter(function(x){ return x.id === id; })[0]; }
 function panelMove(p){
   var x = findEx(p.id), secs = x.mins * 60;
   var h = '<div class="stack">' + backBtn('panel-close', 'Back to exercises') + '<h1>' + esc(x.name) + '</h1>' +
-    '<section class="card"><p class="lbl">' + esc(x.dose) + '</p><ol class="prose" style="margin:0; padding-left:22px">' + x.steps.map(function(s){ return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>' +
-    '<p><strong>Tip:</strong> ' + esc(x.tip) + '</p>';
+    '<section class="card"><div id="stepText"><p class="lbl">' + esc(x.dose) + '</p><ol class="prose" style="margin:0; padding-left:22px">' + x.steps.map(function(s){ return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>' +
+    '<p><strong>Tip:</strong> ' + esc(x.tip) + '</p></div>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>';
   if (x.standing) h += '<p class="hint">Only do standing exercises if your physiotherapist or doctor has said they are safe for you. Keep a counter or sturdy chair within reach.</p>';
   h += '<p class="hint">Stop if you feel sharp pain, chest pain or faint.</p></section>' +
     '<section class="card"><p class="eyebrow">Optional timer</p><div class="exnum" id="extime">' + (p.exRunning ? '' : Math.floor(secs / 60) + ':' + pad(secs % 60)) + '</div>' +
@@ -1709,6 +1731,7 @@ function render(){
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){
     if (b.getAttribute('data-tab') === navTab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
+  saveUi();
   if (ui.scrollTop) { try { window.scrollTo(0, 0); } catch(e){} ui.scrollTop = false; }
   if (ui.refocus) { var f = $(ui.refocus); if (f) { try { f.focus({preventScroll:true}); } catch(e){} } ui.refocus = null; }
   var p = ui.panel;
@@ -2074,7 +2097,7 @@ var A = {
   'clear-ask': function(){ ui.confirmClear = true; render(); },
   'clear-no': function(){ ui.confirmClear = false; render(); },
   'clear-yes': function(){
-    state = blank(); state.setup.done = true; save(); ui.confirmClear = false; ui.draftEp = null; ui.draftTh = null; ui.draftGr = null; ui.example = false;
+    state = blank(); state.setup.done = true; save(); try { localStorage.removeItem(UI_KEY); } catch(e){} ui.confirmClear = false; ui.draftEp = null; ui.draftTh = null; ui.draftGr = null; ui.example = false;
     toast('Data cleared'); go('today');
   }
 };
@@ -2093,7 +2116,7 @@ document.addEventListener('input', function(e){
   d[f] = t.type === 'range' ? +t.value : t.value;
   if (name === 'profile' && f === 'team') state.flare.contacts = t.value;
   if (t.type === 'range') { var out = $('[data-out="' + f + '"]'); if (out) out.textContent = t.value + (t.getAttribute('data-suffix') || ''); }
-  if (persistent(name)) saveSoon();
+  if (persistent(name)) saveSoon(); else saveUiSoon();
 });
 document.addEventListener('change', function(e){
   if (e.target && e.target.id === 'importFile' && e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
@@ -2101,13 +2124,14 @@ document.addEventListener('change', function(e){
 document.addEventListener('keydown', function(e){
   if (e.key === 'Enter' && e.target && e.target.id === 'planText') { e.preventDefault(); A['plan-add'](); }
 });
-window.addEventListener('pagehide', function(){ clearTimeout(saveTimer); save(); });
+window.addEventListener('pagehide', function(){ clearTimeout(saveTimer); save(); clearTimeout(uiTimer); saveUi(); });
 
 (function visit(){
   var now = Date.now();
   if (state.setup.done && state.lastOpen && now - state.lastOpen > 3 * 86400000) ui.welcomeBack = true;
   state.lastOpen = now; save();
 })();
+restoreUi();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   try { navigator.serviceWorker.register('sw.js').catch(function(){}); } catch(e){}
 }

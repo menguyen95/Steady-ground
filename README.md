@@ -30,7 +30,7 @@ That address is what you give patients. Nobody can see patient data through it; 
 
 ### Updating the app later
 
-Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v7` to `steady-ground-v8` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v8` to `steady-ground-v9` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
 
 ## Engagement features (version 3)
 
@@ -70,13 +70,24 @@ Edit the milestone list (`BADGES`) and encouragement lines (`ENCOURAGE`) near th
 
 - **Identity:** ivory background, charcoal text, forest green for primary actions, sage for supporting surfaces, terracotta only in the mark and milestone medals. DM Sans throughout (28 px titles, 21 px headings, 17 px body, 15 px supporting text; no thin weights, no all-caps). All text colours meet 4.5:1 in both light and dark themes. New hills-sun-path mark and app icons.
 - **Four tabs:** Home, My Path (course, goals, pacing, today's plan, flare plan), Tools (Now, Calm, Feel, Move, Log), Progress. Profile and settings sit behind the person icon in the header.
-- **Context-sensitive entry on Home:** I need help right now, I have two minutes, I want to take a step. Pinned tools sit beneath; any tool can be pinned from the Tools tab.
+- **Context-sensitive entry on Home:** I need help right now, I have two minutes, I want to take a step (reworded in version 8). Pinned tools sit beneath; any tool can be pinned from the Tools tab.
 - **Gentle completion feedback:** a brief checkmark and a short acknowledgment; no confetti, no vibration. Milestone cards slide in quietly.
 - **Appearance settings:** theme (match phone, light, dark), three text sizes up to 22 px, and a "reduce visual stimulation" switch that removes animations and completion marks.
 - **Progressive disclosure:** each course session opens with its first part and a "Read the full session" button. Sessions and quick reads have a Read aloud button (the phone's own speech, works offline).
 - **Guided treatment vs independent use:** chosen at set-up, switchable under Me. Independent use hides course prompts from Home and leads My Path with goals; the course stays as a reference.
 - **Transparent privacy:** a "Your data and privacy" card (what is saved, what is shared, no monitoring) and wording on the help screens that the app cannot call anyone.
 - Set-up now lands on Home so a first-time user can complete something useful within about two minutes.
+
+## Version 8: closing the gaps against the design review
+
+Version 7 already covered the identity, four-tab navigation, context-sensitive entry, gentle feedback, appearance settings, pinning, privacy wording and the guided/independent split. This version closes what was left:
+
+- **Resume where you left off.** The open tab, the session or homework being read, and any half-filled form (symptom log, thought record, feeling, goal, set-up) are saved on the phone as the patient types. Closing the app mid-task loses nothing; it reopens on the same screen. Timed exercises (paced breathing, the movement timer) are not resumed, and short-lived screens (the toolkit, a pattern check, sharing, settings) reopen on Home. Clearing data also clears this.
+- **Read aloud on every exercise step**, not only course sessions: 5-4-3-2-1 grounding, muscle relaxation, body scan, attention shift and each movement exercise. Everything still works without sound.
+- **Home entry points** now match the review wording: I need help right now, I have 2 minutes, I want to practise. The current goal keeps its own card; when there is no goal yet a short prompt offers to set one.
+- **Typography floor of 14 px.** Tab labels, scale anchors, day-dot labels, ring captions and the example-data badge were 11 to 13 px; the badge was all caps. All are now 14 px or larger, in sentence case.
+- **The Me button has a visible label** beside the person icon, so profile and settings are not hidden behind an icon alone.
+- **Reduce visual stimulation** no longer freezes the breathing circle (a bug: the setting's blanket transition override also stopped the one animation the exercise needs). The circle still moves slowly; everything else stays still.
 
 ## Installing on an iPhone
 
