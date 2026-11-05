@@ -626,10 +626,10 @@ function voiceScore(v){
   for (i = 0; i < VOICE_NOVELTY.length; i++) if (n.indexOf(VOICE_NOVELTY[i]) > -1) s -= 120;
   for (i = 0; i < VOICE_MALE.length; i++) if (n.indexOf(VOICE_MALE[i]) > -1) { s -= 70; break; }
   for (i = 0; i < VOICE_FEMALE.length; i++) if (n.indexOf(VOICE_FEMALE[i]) > -1) { s += 70; break; }
-  for (i = 0; i < VOICE_RICH.length; i++) if (n.indexOf(VOICE_RICH[i]) > -1) s += 16;
+  for (i = 0; i < VOICE_RICH.length; i++) if (n.indexOf(VOICE_RICH[i]) > -1) s += 9;
   var lang = (v.lang || '').toLowerCase().replace('_', '-');
   if (lang === 'en-ca') s += 12; else if (lang === 'en-gb') s += 10; else if (lang === 'en-us') s += 8; else s += 2;
-  if (v.localService) s += 3;
+  if (v.localService) s += 20;
   if (v['default']) s += 2;
   return s;
 }
@@ -645,6 +645,8 @@ function pickVoice(){
   if (best) voiceCache = best.voiceURI;
   return best || null;
 }
+/* A voice the phone keeps on itself is one it can definitely speak with; the ones it
+   would have to fetch are the ones that go quiet. */
 function setReadLabel(on){
   var bs = document.querySelectorAll('[data-action="read-aloud"]');
   for (var i = 0; i < bs.length; i++) bs[i].textContent = on ? 'Stop reading' : 'Read aloud';
@@ -656,6 +658,11 @@ function stopReading(){
 }
 /* Browsers cut a long utterance off part way through, so the text goes out a sentence or
    two at a time and each piece queues the next. */
+/* Phones list voices they cannot always play: on an iPhone the Enhanced and Premium
+   entries appear in the list whether or not they have been downloaded, and asking for
+   one that is not there produces silence with no error at all. So the first piece is
+   watched, and if nothing has begun shortly after asking, the whole thing is tried
+   again on whatever voice the phone uses by default, which always speaks. */
 function speakText(text, voice, done){
   var synth = window.speechSynthesis;
   var parts = text.match(/[^.!?]+[.!?]*\s*/g) || [text], chunks = [], cur = '';
@@ -663,24 +670,47 @@ function speakText(text, voice, done){
     if (cur && (cur + p).length > 170) { chunks.push(cur.trim()); cur = p; } else cur += p;
   });
   if (cur.trim()) chunks.push(cur.trim());
-  var i = 0;
-  function next(){
-    if (!ui.speaking) return;
-    if (i >= chunks.length) { if (done) done(); return; }
-    var u = new SpeechSynthesisUtterance(chunks[i++]);
-    if (voice) { u.voice = voice; u.lang = voice.lang; } else u.lang = 'en-GB';
-    u.rate = 0.92; u.pitch = 1.02;
-    u.onend = next;
-    u.onerror = function(){ stopReading(); };
-    try { synth.speak(u); } catch(e){ stopReading(); }
+  if (!chunks.length) { if (done) done(); return; }
+  var i = 0, pick = voice, began = false, guard = null, retried = false;
+  function giveUp(){
+    clearTimeout(guard); stopReading();
+    toast('Read aloud did not start. Check the side switch and the volume.');
   }
-  next();
+  function fallback(){
+    if (!ui.speaking || began) return;
+    clearTimeout(guard);
+    if (retried || !pick) { giveUp(); return; }
+    /* The chosen voice stayed silent, so drop back to the phone's own. */
+    retried = true; pick = null; i = 0;
+    try { synth.cancel(); } catch(e){}
+    say();
+  }
+  function say(){
+    if (!ui.speaking) return;
+    if (i >= chunks.length) { clearTimeout(guard); if (done) done(); return; }
+    var u = new SpeechSynthesisUtterance(chunks[i]);
+    if (pick) { try { u.voice = pick; if (pick.lang) u.lang = pick.lang; } catch(e){} }
+    u.rate = 0.92; u.pitch = 1.02;
+    u.onstart = function(){ began = true; clearTimeout(guard); };
+    u.onend = function(){ began = true; clearTimeout(guard); i++; say(); };
+    u.onerror = function(){ if (began) { stopReading(); } else fallback(); };
+    try { synth.resume(); } catch(e){}
+    try { synth.speak(u); } catch(e){ fallback(); return; }
+    if (i === 0 && !began) { clearTimeout(guard); guard = setTimeout(fallback, 1500); }
+  }
+  say();
 }
 function readAloud(id){
   try {
     var el = document.getElementById(id);
     if (!el || !window.speechSynthesis) { toast('Read aloud is not available on this phone'); return; }
-    if (ui.speaking) { stopReading(); return; }
+    if (ui.speaking) {
+      /* A voice that went quiet without ever ending leaves the flag set, and every later
+         tap would then only switch it off again. Trust the engine over the flag. */
+      var busy = false; try { busy = window.speechSynthesis.speaking || window.speechSynthesis.pending; } catch(e){}
+      if (busy) { stopReading(); return; }
+      ui.speaking = false; setReadLabel(false);
+    }
     var text = el.textContent.replace(/\s+/g, ' ').trim(); if (!text) return;
     try { window.speechSynthesis.cancel(); } catch(e){}
     ui.speaking = true; setReadLabel(true);
@@ -1192,7 +1222,7 @@ function viewTools(){
          toolRow('panel', ' data-type="ground"', 'ground', '5-4-3-2-1 sensory grounding', 'Bring your attention back to the room, one sense at a time') +
          toolRow('panel', ' data-type="pmr"', 'pmr', 'Progressive muscle relaxation', 'Tense and release, one muscle group at a time') +
          toolRow('panel', ' data-type="shift"', 'shift', 'Shift your attention', 'Give your mind a different job for a few minutes') +
-         toolRow('panel', ' data-type="bls"', 'bls', 'Side to side', 'Something steady moving left and right, for your eyes to follow or your ears to hear') +
+         toolRow('panel', ' data-type="bls"', 'bls', 'Side to side', 'A dot to follow with your eyes, or a soft chime moving ear to ear') +
          '<p class="hint">Each calming tool asks for your stress level before and after and saves it to your grounding record. You can stop any exercise at any point; what you did still counts. Pin the ones you use most to Home.</p>';
   } else {
     h += '<section class="card"><p>Gentle movements to practise smooth, automatic movement. Do any exercises your physiotherapist has given you first. Stop if you feel sharp pain, chest pain or faint.</p></section>' +
@@ -1236,40 +1266,51 @@ function saveGrounding(p, minutes){
    else, for the same reason the breathing circle does: here the movement is the exercise. */
 var BLS_SPEED = { slow:1.9, steady:1.2 };
 var BLS_LEN = [[30,'30 seconds'],[60,'1 minute'],[120,'2 minutes']];
-var audioCtx = null, toneNodes = null;
-function startTone(){
+var audioCtx = null, audioMaster = null;
+function audioReady(){
   try {
     var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return false;
     if (!audioCtx) audioCtx = new AC();
     if (audioCtx.state === 'suspended') { try { audioCtx.resume(); } catch(e){} }
-    var master = audioCtx.createGain(); master.gain.value = 0.0001; master.connect(audioCtx.destination);
-    function ear(freq, pan){
-      var osc = audioCtx.createOscillator(); osc.type = 'sine'; osc.frequency.value = freq;
-      if (audioCtx.createStereoPanner) { var sp = audioCtx.createStereoPanner(); sp.pan.value = pan; osc.connect(sp); sp.connect(master); }
-      else { var mg = audioCtx.createChannelMerger(2); osc.connect(mg, 0, pan < 0 ? 0 : 1); mg.connect(master); }
-      osc.start(); return osc;
-    }
-    var a = ear(196, -1), b = ear(206, 1), t = audioCtx.currentTime;
-    master.gain.setValueAtTime(0.0001, t);
-    master.gain.exponentialRampToValueAtTime(0.16, t + 2.5);
-    toneNodes = { master:master, oscs:[a, b] };
+    if (!audioMaster) { audioMaster = audioCtx.createGain(); audioMaster.gain.value = 0.9; audioMaster.connect(audioCtx.destination); }
     return true;
   } catch(e){ return false; }
 }
-function stopTone(){
-  if (!toneNodes || !audioCtx) { toneNodes = null; return; }
-  var g = toneNodes.master, oscs = toneNodes.oscs;
+/* One soft chime, landing in a single ear. A struck bell is a short burst of quiet
+   partials that fade at different rates, so each partial gets its own decay, and the
+   whole thing is rolled off at the top to take any hardness out of it. */
+function chime(pan){
+  if (!audioReady()) return;
   try {
     var t = audioCtx.currentTime;
-    g.gain.cancelScheduledValues(t);
-    g.gain.setValueAtTime(Math.max(g.gain.value, 0.0001), t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.7);
+    var filt = audioCtx.createBiquadFilter();
+    filt.type = 'lowpass'; filt.frequency.value = 2400; filt.Q.value = 0.5;
+    if (audioCtx.createStereoPanner) { var sp = audioCtx.createStereoPanner(); sp.pan.value = pan; filt.connect(sp); sp.connect(audioMaster); }
+    else { var mg = audioCtx.createChannelMerger(2); filt.connect(mg, 0, pan < 0 ? 0 : 1); mg.connect(audioMaster); }
+    var base = 587.33, parts = [[1, 0.20, 1.7], [2.01, 0.065, 1.1], [2.76, 0.03, 0.7]];
+    parts.forEach(function(pt){
+      var osc = audioCtx.createOscillator(), g = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.value = base * pt[0];
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(pt[1], t + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + pt[2]);
+      osc.connect(g); g.connect(filt);
+      osc.start(t); osc.stop(t + pt[2] + 0.05);
+    });
+    setTimeout(function(){ try { filt.disconnect(); } catch(e){} }, 2400);
   } catch(e){}
-  setTimeout(function(){
-    oscs.forEach(function(o){ try { o.stop(); } catch(e){} try { o.disconnect(); } catch(e){} });
-    try { g.disconnect(); } catch(e){}
-  }, 900);
-  toneNodes = null;
+}
+/* The chimes are one-shot, so there is no drone to switch off: this only quiets
+   whatever is still ringing when the patient leaves the screen. */
+function stopTone(){
+  if (!audioCtx || !audioMaster) return;
+  try {
+    var t = audioCtx.currentTime;
+    audioMaster.gain.cancelScheduledValues(t);
+    audioMaster.gain.setValueAtTime(Math.max(audioMaster.gain.value, 0.0001), t);
+    audioMaster.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+  } catch(e){}
+  setTimeout(function(){ try { if (audioMaster) audioMaster.gain.value = 0.9; } catch(e){} }, 400);
 }
 function panelBls(p){
   var h = '<div class="stack">' + backBtn('panel-close', 'Back to tools');
@@ -1285,28 +1326,28 @@ function panelBls(p){
         '<div class="row"><button type="button" class="btn btn-quiet btn-wide" data-action="bls-stop">Stop</button></div>' +
         '<p class="hint">Stop if your eyes ache or you start to feel dizzy or sick.</p></section></div>';
     }
-    return h + '<section class="card"><p class="bigtext">Let your eyes close, or rest them on one spot. There is nothing to do but listen.</p>' +
+    return h + '<section class="card"><p class="bigtext">Let your eyes close, or rest them on one spot. Nothing to do but notice each chime, left, then right.</p>' +
       '<div class="bls-ears" aria-hidden="true"><span class="bls-ear">Left</span><span class="bls-dot bls-dot-sm" id="blswave"></span><span class="bls-ear">Right</span></div>' +
       '<p class="hint" style="text-align:center" id="blsleft"></p>' +
       '<div class="row"><button type="button" class="btn btn-quiet btn-wide" data-action="bls-stop">Stop</button></div>' +
       '<p class="hint">Keep the volume low. Stop if it becomes unpleasant or you start to feel dizzy.</p></section></div>';
   }
   h += '<h1>Side to side</h1>' +
-    '<section class="card"><p>Something steady that alternates between your left and your right: a dot to follow with your eyes, or a quiet tone that moves between your ears. Many people find it settling when they feel wound up, or stuck going round the same thought.</p>' +
+    '<section class="card"><p>Something steady that alternates between your left and your right: a dot to follow with your eyes, or a soft chime that lands in one ear and then the other. Many people find it settling when they feel wound up, or stuck going round the same thought.</p>' +
     '<p class="hint">This is here for settling, not for working through a difficult memory. If something upsetting comes up while you are doing it, stop, do a minute of paced breathing, and mention it to your clinician. If you have seizure-like episodes that start with something you see or hear, check with your clinician before using this one.</p></section>';
   h += '<section class="card"><div class="field"><span class="lbl">Which one</span><div class="chips" role="group" aria-label="Type">' +
     '<button type="button" class="chip" aria-pressed="' + (p.mode === 'eyes') + '" data-action="bls-pick" data-key="mode" data-val="eyes">Eye movements</button>' +
     '<button type="button" class="chip" aria-pressed="' + (p.mode === 'sound') + '" data-action="bls-pick" data-key="mode" data-val="sound">Sound</button>' +
     '</div></div>';
-  if (p.mode === 'eyes') {
-    h += '<div class="field"><span class="lbl">Speed</span><div class="chips" role="group" aria-label="Speed">' +
+  if (p.mode) {
+    h += '<div class="field"><span class="lbl">' + (p.mode === 'sound' ? 'Pace' : 'Speed') + '</span><div class="chips" role="group" aria-label="Pace">' +
       [['slow','Slow'],['steady','Steady']].map(function(t){
         return '<button type="button" class="chip" aria-pressed="' + (p.speed === t[0]) + '" data-action="bls-pick" data-key="speed" data-val="' + t[0] + '">' + t[1] + '</button>';
       }).join('') + '</div></div>';
   }
   if (p.mode === 'sound') {
     h += '<div class="field"><span class="lbl">Put your headphones in first</span>' +
-      '<p class="hint">This one needs headphones or earbuds, because each ear is given its own tone and the effect does not exist through a speaker. Turn the volume right down before you start, then bring it up only until you can just hear it. It should stay quiet throughout.</p></div>';
+      '<p class="hint">Use headphones or earbuds if you can, so each chime lands clearly in one ear; through a speaker the left and right run together. Turn the volume down before you start, then bring it up only until the chime is soft and clear.</p></div>';
   }
   h += '<div class="field"><span class="lbl">Length</span><div class="chips" role="group" aria-label="Length">' +
     BLS_LEN.map(function(t){
@@ -1320,13 +1361,15 @@ function panelBls(p){
 function startBlsLoop(){
   var p = ui.panel, total = p.secs * 1000, sweep = (BLS_SPEED[p.speed] || BLS_SPEED.slow) * 1000;
   var dot = $('#blsdot'), track = $('#blstrack'), left = $('#blsleft'), wave = $('#blswave');
-  var useRaf = typeof requestAnimationFrame === 'function';
+  var useRaf = typeof requestAnimationFrame === 'function', lastBeat = -1;
   try { if (navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request('screen').then(function(l){ timers.wl = l; }).catch(function(){}); } catch(e){}
   function frame(){
     var q = ui.panel;
     if (!q || q.type !== 'bls' || !q.running) return;
     var el = Date.now() - p.t0;
     if (el >= total) { finishBls(true); return; }
+    var beat = Math.floor(el / sweep);
+    if (p.mode === 'sound' && beat !== lastBeat) { lastBeat = beat; chime(beat % 2 ? 1 : -1); }
     var cyc = el % (sweep * 2), x = cyc <= sweep ? cyc / sweep : 2 - cyc / sweep;
     var eased = (1 - Math.cos(Math.PI * x)) / 2;
     if (dot && track) {
@@ -2237,7 +2280,7 @@ var A = {
   'bls-start': function(){
     var p = ui.panel;
     if (!p.mode) { toast('Choose eye movements or sound first'); return; }
-    if (p.mode === 'sound' && !startTone()) { toast('Sound is not available on this phone. Try eye movements instead.'); return; }
+    if (p.mode === 'sound' && !audioReady()) { toast('Sound is not available on this phone. Try eye movements instead.'); return; }
     p.running = true; p.done = false; p.t0 = Date.now(); render();
   },
   'bls-stop': function(){ finishBls(false); },

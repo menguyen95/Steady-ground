@@ -30,7 +30,7 @@ That address is what you give patients. Nobody can see patient data through it; 
 
 ### Updating the app later
 
-Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v8` to `steady-ground-v9` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v10` to `steady-ground-v11` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
 
 ## Engagement features (version 3)
 
@@ -85,9 +85,28 @@ Version 7 already covered the identity, four-tab navigation, context-sensitive e
 - **Resume where you left off.** The open tab, the session or homework being read, and any half-filled form (symptom log, thought record, feeling, goal, set-up) are saved on the phone as the patient types. Closing the app mid-task loses nothing; it reopens on the same screen. Timed exercises (paced breathing, the movement timer) are not resumed, and short-lived screens (the toolkit, a pattern check, sharing, settings) reopen on Home. Clearing data also clears this.
 - **Read aloud on every exercise step**, not only course sessions: 5-4-3-2-1 grounding, muscle relaxation, body scan, attention shift and each movement exercise. Everything still works without sound.
 - **Home entry points** now match the review wording: I need help right now, I have 2 minutes, I want to practise. The current goal keeps its own card; when there is no goal yet a short prompt offers to set one.
-- **Typography floor of 14 px.** Tab labels, scale anchors, day-dot labels, ring captions and the example-data badge were 11 to 13 px; the badge was all caps. All are now 14 px or larger, in sentence case.
+- **Typography floor of 14 px.** Tab labels, scale anchors, day-dot labels, ring captions and the example-data badge were 11 to 13 px; the badge was all caps. All are now 14 px, in sentence case. The one exception is the chart axis numbers, at 13 px: at 14 px they collide on a narrow phone.
 - **The Me button has a visible label** beside the person icon, so profile and settings are not hidden behind an icon alone.
 - **Reduce visual stimulation** no longer freezes the breathing circle (a bug: the setting's blanket transition override also stopped the one animation the exercise needs). The circle still moves slowly; everything else stays still.
+
+## Version 9: a better read-aloud voice, and bilateral stimulation
+
+- **Read aloud now chooses a natural-sounding woman's voice.** The app previously used whatever voice the phone defaulted to, which on most Android phones and on Windows is a flat, robotic one. It now scores every English voice the device offers, preferring a female voice, then the ones the platform marks as natural, neural, premium or enhanced, then the closest locale, and reads at a slightly slower pace. Long passages are read a sentence or two at a time, which also fixes reading cutting off part way through a course session.
+- **A voice picker in settings** ("Read aloud"), with a sample button, because voice quality is set by the phone rather than by the app. The card explains where to download a better voice for free on iPhone and on Android. Clearing the choice returns to the suggested voice.
+- **Speech stops** when the patient navigates away or closes the app, instead of carrying on in the background.
+- **New calming tool: Side to side** (bilateral stimulation), in Tools, Calm. Two forms:
+  - **Eye movements** - a dot sweeping left and right for the eyes to follow, at a slow or steady pace, for 30 seconds, 1 minute or 2 minutes.
+  - **Sound** - two quiet tones ten cycles apart, one in each ear, through the Web Audio API, fading in and out gently. The set-up screen asks the patient to put headphones in first and to keep the volume low, since the effect does not exist through a speaker.
+  - It is framed as a settling exercise rather than memory work, tells the patient to stop and speak to their clinician if something upsetting comes up, and asks anyone whose seizure-like episodes are triggered by what they see or hear to check first. Like the other calming tools it records stress before and after into the grounding record.
+  - The dot is positioned from script on each frame rather than by a CSS animation, so it keeps moving when "Reduce visual stimulation" is on, for the same reason the breathing circle does: there the movement is the exercise. That setting's description now says so.
+
+## Version 10: the chime, and read aloud that recovers itself
+
+- **The sound option is a soft chime instead of a drone.** Version 9 held two continuous tones a few cycles apart, one per ear. It was unpleasant to sit with, and it was also the wrong idea: alternating tones are what bilateral stimulation normally uses, and the evidence behind continuous binaural beats is thin. Each chime is now a struck bell built from three quiet partials with their own decay rates, rolled off above 2.4 kHz, reaching full volume in about 18 ms and fading to nothing within two seconds. Chimes alternate ears in time with the sweep, so the pace control now applies to sound as well.
+- Headphones are now recommended rather than required: the separation is clearer through them, but the chimes still alternate on a speaker.
+- **Read aloud recovers when a voice will not speak.** A phone will list voices it cannot actually play, and an iPhone lists its Enhanced and Premium voices whether or not they have been downloaded. Asking for one of those produces silence with no error, which is what broke version 9 on a real phone. The first piece of text is now watched, and if nothing has begun within a second and a half the whole passage is tried again on the phone's own default voice, which always speaks. If that fails too the app says so rather than sitting silent.
+- A voice that went quiet also used to leave read aloud stuck in the speaking state, so every later tap only switched it off again. The engine is now trusted over that flag.
+- Voice scoring now weights a voice the phone keeps on itself well above the words premium or enhanced in its name.
 
 ## Installing on an iPhone
 
