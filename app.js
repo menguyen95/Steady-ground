@@ -8,7 +8,7 @@ function testStore(){ try { localStorage.setItem('sg-t','1'); localStorage.remov
 var canStore = testStore();
 function blank(){
   return { setup:{done:false, mode:''}, episodes:[], grounding:[], thoughts:[], checkins:{}, weeks:{}, goals:[], activity:[], plan:{},
-           flare:{signs:'',helps:'',contacts:'',pause:''}, read:{}, course:{answers:{}, done:{}, read:{}},
+           flare:{signs:'',helps:'',contacts:'',pause:''}, read:{}, course:{answers:{}, done:{}, read:{}}, learn:{read:{}, answers:{}},
            badges:{}, badgesInit:false, prefs:{textSize:'normal', theme:'system', calm:false, voice:''}, stats:{shares:0}, lastOpen:0, pins:['breath','ground'],
            feelings:[], profile:{name:'', colour:'teal', vision:'', about:'', team:'', joined:0, presentation:[], difficulties:[], matters:''},
            fgoals:[], wins:{}, patterns:[] };
@@ -18,7 +18,7 @@ function mergeInto(p){
   var b = blank();
   for (var k in b) {
     if (p && p[k] !== undefined && p[k] !== null) {
-      if (k === 'course' || k === 'setup' || k === 'flare' || k === 'prefs' || k === 'stats' || k === 'profile') { for (var kk in b[k]) if (p[k][kk] !== undefined) b[k][kk] = p[k][kk]; }
+      if (k === 'course' || k === 'learn' || k === 'setup' || k === 'flare' || k === 'prefs' || k === 'stats' || k === 'profile') { for (var kk in b[k]) if (p[k][kk] !== undefined) b[k][kk] = p[k][kk]; }
       else b[k] = p[k];
     }
   }
@@ -38,7 +38,7 @@ function saveSoon(){ clearTimeout(saveTimer); saveTimer = setTimeout(save, 300);
 /* Where the patient was: the open tab, session, homework and any half-filled form are kept on the phone,
    so closing the app mid-task loses nothing and it reopens on the same screen. Timed exercises are not resumed. */
 var UI_KEY = 'steady-ground-where';
-var UI_KEEP = ['tab','sub','session','hw','lesson','goalDetail','fullTeach','draftEp','draftTh','thStep','draftFeel','feelStep','draftGr','draftFgoal','fgoalForm','draftAttempt','draftGoal','goalForm','patternSel','reflectOpen','planKind','setupStep','welcomeMode','draftSetup'];
+var UI_KEEP = ['tab','sub','learnTopic','lesson','goalDetail','draftEp','draftTh','thStep','draftFeel','feelStep','draftGr','draftFgoal','fgoalForm','draftAttempt','draftGoal','goalForm','patternSel','reflectOpen','planKind','setupStep','welcomeMode','draftSetup'];
 function saveUi(){
   if (!canStore) return;
   try { var o = {}; UI_KEEP.forEach(function(k){ o[k] = ui[k]; }); localStorage.setItem(UI_KEY, JSON.stringify(o)); } catch(e){}
@@ -52,6 +52,8 @@ function restoreUi(){
     var o = JSON.parse(raw), keys = state.setup.done ? UI_KEEP : ['setupStep','welcomeMode','draftSetup'];
     keys.forEach(function(k){ if (o[k] !== undefined && o[k] !== null) { if (k === 'sub') { for (var kk in o.sub) ui.sub[kk] = o.sub[kk]; } else ui[k] = o[k]; } });
     if (ui.draftFeel) { ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.panel = {type:'feel', before:-1, done:false}; }
+    if (ui.sub.path === 'course') ui.sub.path = 'learn';
+    if (ui.learnTopic && !findTopic(ui.learnTopic)) ui.learnTopic = null;
     /* Short-lived screens (the toolkit, a pattern check, sharing, settings) reopen on Home instead. */
     if (['today','path','tools','progress','me','course','plan','track'].indexOf(ui.tab) < 0) ui.tab = 'today';
   } catch(e){}
@@ -111,20 +113,6 @@ function topCounts(list, key, limit){
   return Object.keys(c).map(function(k){ return [k, c[k]]; })
     .sort(function(a,b){ return b[1] - a[1] || (a[0] < b[0] ? -1 : 1); }).slice(0, limit);
 }
-/* Workbook forms that the Track tab already provides as live trackers are routed there instead of shown as static homework. */
-var TRACK_RE = /^(Daily symptom log|Grounding activity record|Weekly symptom summary)$/i;
-var _sessions = null;
-function sessions(){
-  if (_sessions) return _sessions;
-  _sessions = (window.SESSIONS_PART || []).slice().sort(function(a,b){ return a.n - b.n; }).map(function(s){
-    var hw = s.homework || [], keep = hw.filter(function(h){ return !TRACK_RE.test(h.title || ''); });
-    var c = {}; for (var k in s) c[k] = s[k];
-    c.homework = keep; c.tracking = keep.length !== hw.length;
-    return c;
-  });
-  return _sessions;
-}
-function findSession(n){ return sessions().filter(function(s){ return s.n === +n; })[0]; }
 
 /* ---------- content ---------- */
 var SYMPTOMS = ['Weakness','Shaking or tremor','Difficulty walking','Seizure-like episode','Speech difficulty','Numbness or tingling','Pain','Fatigue','Brain fog','Dizziness','Other'];
@@ -267,25 +255,23 @@ function paceDaysMet(){
   state.goals.forEach(function(g){ var d = parseKey(g.since || today); for (var i = 0; i < 400; i++) { var k = dayKey(addDays(d, i)); if (k > today) break; if (goalMins(g, k) >= g.target) n++; } });
   return n;
 }
-function sessionsDoneThrough(n){ var S = sessions(); if (!S.length) return false; for (var i = 1; i <= n; i++) { var s = findSession(i); if (!s) return false; if (!state.course.read[i]) return false; if (!(s.homework || []).every(function(h){ return state.course.done[hwKey(s, h)]; })) return false; } return true; }
+
 function stats(){
-  var cp = courseProgress(), s1 = findSession(1), s1done = false;
-  if (s1) s1done = !!state.course.read[1] && (s1.homework || []).every(function(h){ return state.course.done[hwKey(s1, h)]; });
+  var lp = learnProgress();
   var maxDrop = 0; state.grounding.forEach(function(g){ if (g.before >= 0 && g.after >= 0) maxDrop = Math.max(maxDrop, g.before - g.after); });
   var f = state.flare;
   return {
     ground: state.grounding.length, maxDrop: maxDrop, last7: practiceLast7(), run: practiceRun(),
     episodes: state.episodes.length, checkins: Object.keys(state.checkins).filter(function(k){ var c = state.checkins[k]; return c.mood || c.energy; }).length,
     weeks: Object.keys(state.weeks).filter(function(k){ var w = state.weeks[k]; return w.functioning != null || w.signs || w.stopped; }).length,
-    thoughts: state.thoughts.length, s1done: s1done, coursePct: cp.pct, courseTotal: cp.total,
+    thoughts: state.thoughts.length, learnRead: lp.read, learnTotal: lp.total, reflections: reflectionCount(),
     moves: state.activity.filter(function(a){ return a.kind === 'move'; }).length, paceDays: paceDaysMet(),
     flare: !!(f.signs && f.helps), shares: state.stats.shares || 0,
     skills: Object.keys(state.grounding.reduce(function(o,g){ o[g.skill] = 1; return o; }, {})).length,
     practiceDays: Object.keys(practiceDaySet()).length,
     tries: allAttempts().length, approached: allAttempts().filter(function(x){ return x.a.result !== 'not'; }).length,
     goalsDone: state.fgoals.filter(function(g){ return g.done; }).length, returns: state.stats.returns || 0,
-    feelings: state.feelings.length, patterns: state.patterns.length, wins: Object.keys(state.wins).length,
-    phase: sessionsDoneThrough(3) ? (sessionsDoneThrough(7) ? (sessionsDoneThrough(10) ? 3 : 2) : 1) : 0
+    feelings: state.feelings.length, patterns: state.patterns.length, wins: Object.keys(state.wins).length
   };
 }
 var BADGES = [
@@ -311,10 +297,9 @@ var BADGES = [
   {id:'th5', cat:'track', name:'Five thought records', how:'Complete 5 thought records', test:function(s){ return s.thoughts >= 5; }},
   {id:'wins7', cat:'track', name:'Seven good things', how:'Note what went well on 7 days', test:function(s){ return s.wins >= 7; }},
   {id:'week1', cat:'track', name:'Week in review', how:'Fill in a weekly summary', test:function(s){ return s.weeks >= 1; }},
-  {id:'s1', cat:'course', name:'Understanding FND', how:'Finish Session 1', test:function(s){ return s.s1done; }},
-  {id:'course33', cat:'course', name:'Phase 1 complete', how:'Finish Sessions 1 to 3: understanding', test:function(s){ return s.phase >= 1; }},
-  {id:'course70', cat:'course', name:'Phase 2 complete', how:'Finish Sessions 4 to 7: active change', test:function(s){ return s.phase >= 2; }},
-  {id:'course100', cat:'course', name:'Ready for independence', how:'Finish all ten sessions', test:function(s){ return s.phase >= 3; }},
+  {id:'learn1', cat:'course', name:'Understanding FND', how:'Read a Learn topic', test:function(s){ return s.learnRead >= 1; }},
+  {id:'learnall', cat:'course', name:'The whole picture', how:'Read all four Learn topics', test:function(s){ return s.learnTotal && s.learnRead >= s.learnTotal; }},
+  {id:'reflect1', cat:'course', name:'Looking inward', how:'Answer a reflection question', test:function(s){ return s.reflections >= 1; }},
   {id:'move1', cat:'move', name:'First movement practice', how:'Complete a movement exercise', test:function(s){ return s.moves >= 1; }},
   {id:'move10', cat:'move', name:'Ten movement practices', how:'Complete 10 movement exercises', test:function(s){ return s.moves >= 10; }},
   {id:'flare', cat:'share', name:'Plan in place', how:'Write your flare plan', test:function(s){ return s.flare; }},
@@ -411,15 +396,14 @@ function viewCompleted(){
   state.thoughts.forEach(function(t){ ev.push({ ts:t.ts, cat:'track', text:'Thought record' + (t.thought ? ': ' + t.thought : '') }); });
   state.feelings.forEach(function(f){ var fam = familyById(f.family); ev.push({ ts:f.ts, cat:'track', text:'Named a feeling: ' + (fam ? fam.name.toLowerCase() : '') + (f.word ? ', ' + f.word.toLowerCase() : '') }); });
   state.activity.forEach(function(a){ if (a.kind === 'move') ev.push({ ts:a.ts, cat:'move', text:a.label + ', ' + a.minutes + ' min' }); if (a.kind === 'goal') ev.push({ ts:a.ts, cat:'plan', text:'+' + a.minutes + ' min of ' + a.label }); });
-  var S = sessions();
-  Object.keys(state.course.done).forEach(function(k){ var p = k.split(':'), s = findSession(+p[0]); var hw = s && s.homework.filter(function(h){ return String(h.day) === p[1]; })[0]; ev.push({ ts:state.course.done[k], cat:'course', text:'Session ' + p[0] + ' homework done' + (hw ? ': ' + hwTitle(hw) : '') }); });
+  Object.keys(state.learn.read).forEach(function(id){ var t = findTopic(id); if (t && state.learn.read[id]) ev.push({ ts:state.learn.read[id], cat:'course', text:'Read: ' + t.title }); });
   allAttempts().forEach(function(x){ var st = byId(x.goal.steps, x.a.stepId); ev.push({ ts:x.ts, cat:'plan', text:(x.a.result === 'did' ? 'Did a step: ' : x.a.result === 'part' ? 'Did part of a step: ' : 'Tried a step: ') + (st ? st.text : x.goal.name) }); });
   state.fgoals.forEach(function(g){ if (g.done && g.doneTs) ev.push({ ts:g.doneTs, cat:'plan', text:'Goal reached: ' + g.name }); });
   Object.keys(state.wins).forEach(function(k){ ev.push({ ts:parseKey(k).getTime() + 20 * 3600000, cat:'track', text:'Went well: ' + state.wins[k] }); });
   state.patterns.forEach(function(pt){ ev.push({ ts:pt.ts, cat:'track', text:'Pattern check: ' + joinList(pt.items).toLowerCase() }); });
   BADGES.forEach(function(b){ if (state.badges[b.id]) ev.push({ ts:state.badges[b.id], cat:'share', text:'Milestone: ' + b.name }); });
   ev = ev.filter(function(e){ return e.ts > 0; }).sort(function(a,b){ return b.ts - a.ts; }).slice(0, 150);
-  if (!ev.length) return '<section class="card empty"><h2>Completed tasks will appear here</h2><p class="hint">Every practice, log entry, homework and milestone, day by day.</p></section>';
+  if (!ev.length) return '<section class="card empty"><h2>Completed tasks will appear here</h2><p class="hint">Every practice, log entry, topic read and milestone, day by day.</p></section>';
   var days = {}, order = [];
   ev.forEach(function(e){ var k = dayKey(e.ts); if (!days[k]) { days[k] = []; order.push(k); } days[k].push(e); });
   var total = ev.length, wk = lastDays(7), n7 = ev.filter(function(e){ return wk.indexOf(dayKey(e.ts)) > -1; }).length;
@@ -454,11 +438,11 @@ function applyPrefs(){
   } catch(e){}
 }
 function applyColour(){ applyPrefs(); }
-function guided(){ var cp = courseProgress(); return state.setup.mode === 'course' && !(cp.total && !cp.next); }
+function guided(){ return state.setup.mode === 'course'; }
 function initials(name){ var p = (name || '').trim().split(/\s+/).filter(Boolean); return p.length ? (p[0][0] + (p.length > 1 ? p[p.length-1][0] : '')).toUpperCase() : '•'; }
 function viewMe(){
   var pr = state.profile, s = stats(), earned = BADGES.filter(function(b){ return state.badges[b.id]; }), recent = earned.sort(function(a,b){ return state.badges[b.id] - state.badges[a.id]; }).slice(0,3);
-  var vision = pr.vision || state.course.answers.s1d2_4 || '';
+  var vision = pr.vision || (state.course.answers && state.course.answers.s1d2_4) || '';
   var joined = pr.joined ? fmtDay(dayKey(pr.joined)) : '';
   var h = '<div class="stack">' + backBtn('goto-today', 'Back') + '<h1>Me</h1>';
   h += '<section class="card"><div class="row" style="align-items:center"><div class="avatar">' + esc(initials(pr.name)) + '</div><div class="stack-s" style="flex:1; min-width:160px"><h2>' + esc(pr.name || 'Your name') + '</h2><p class="meta">' + (joined ? 'Using Steady Ground since ' + esc(joined) + '. ' : '') + s.ground + ' practices, ' + earned.length + ' milestones.</p></div></div>' +
@@ -481,8 +465,8 @@ var ui = {
   tab:'today', sub:{track:'episodes', tools:'calm', plan:'pacing', export:'pdf', progress:'trends'}, draftFeel:null, feelStep:1,
   panel:null, draftEp:null, draftTh:null, thStep:1, draftGoal:null, goalForm:false, draftGr:null,
   example:false, confirmDel:null, confirmClear:false, summaryText:null,
-  planKind:'activity', lesson:null, session:null, hw:null, scrollTop:false, refocus:null,
-  exp:{range:28, pdf:true, csv:true, backup:false, busy:false, links:null}, importMsg:'',
+  planKind:'activity', lesson:null, learnTopic:null, scrollTop:false, refocus:null,
+  exp:{range:28, pdf:true, csv:true, backup:false, reflect:false, busy:false, links:null}, importMsg:'',
   celebrate:[], welcomeBack:false, remindTime:'09:00', remindLinks:null,
   setupStep:0, draftSetup:{presentation:[], difficulties:[], matters:'', goal:''}, goalDetail:null, fgoalForm:false, draftFgoal:null, draftAttempt:null, patternSel:[], reflectOpen:false
 };
@@ -494,7 +478,8 @@ function stopTimers(){
   if (timers.raf){ try { cancelAnimationFrame(timers.raf); } catch(e){} timers.raf = null; }
   /* The tone keeps playing across a redraw while its own session is still running, and stops the moment it is not. */
   var bp = ui.panel;
-  if (!(bp && bp.type === 'bls' && bp.running && bp.mode === 'sound')) stopTone();
+  if (!(bp && bp.type === 'move' && bp.id === 'walk' && bp.metro)) stopMetro();
+  if (!(bp && bp.type === 'bls' && bp.running && bp.mode === 'sound') && !metroRunning()) stopTone();
   if (timers.wl){ try { timers.wl.release(); } catch(e){} timers.wl = null; }
 }
 
@@ -542,12 +527,12 @@ function viewWelcome(){
   var m = ui.welcomeMode || '', st = ui.setupStep || 0, pr = state.profile, d = ui.draftSetup;
   var h = '<div class="welcome">';
   if (st === 0) {
-    return h + '<svg class="mark" style="width:72px;height:72px" viewBox="0 0 64 64" aria-hidden="true"><circle cx="43" cy="21" r="8.5" fill="#C9856B"/><path d="M26 50C32 38 44 30 64 32V50Z" fill="#A9C5B3"/><path d="M0 50C3 34 16 22 34 24C42 25 44 30 42 33C39 37 32 38 30 44C29 47 30 49 31 50Z" fill="#24584F"/><path d="M27 50C28 45 32 42 37 40C41 38 44 35 46 30" fill="none" stroke="#F7F5F0" stroke-width="3.2" stroke-linecap="round"/></svg>' +
+    return h + logoSvg('mark mark-lg', 'sgw') +
       '<div><p class="eyebrow">Welcome to</p><h1>Steady Ground</h1></div>' +
-      '<p>A recovery companion for functional neurological disorder: help in the moment, small real-world steps, and a course you can take at your own pace. Everything you enter stays on this phone until you choose to share it with your clinic.</p>' +
+      '<p>Support for living with functional neurological disorder: help in the moment, small real-world steps, and short topics to read and reflect on at your own pace. Everything you enter stays on this phone until you choose to share it with your clinic.</p>' +
       '<div class="stack-s">' +
-      '<button type="button" class="optbtn" aria-pressed="' + (m === 'course') + '" data-action="welcome-pick" data-val="course"><span class="t">Start with the course</span><span class="meta">Ten sessions from the FND psychotherapy workbook, with short teaching and real-world homework.</span></button>' +
-      '<button type="button" class="optbtn" aria-pressed="' + (m === 'tools') + '" data-action="welcome-pick" data-val="tools"><span class="t">Start with what I need today</span><span class="meta">Tools for symptoms, a first real-world goal, and the course whenever you want it.</span></button>' +
+      '<button type="button" class="optbtn" aria-pressed="' + (m === 'course') + '" data-action="welcome-pick" data-val="course"><span class="t">I am working with a clinician</span><span class="meta">Use the app alongside your treatment, and bring what you notice to your appointments.</span></button>' +
+      '<button type="button" class="optbtn" aria-pressed="' + (m === 'tools') + '" data-action="welcome-pick" data-val="tools"><span class="t">I am using it on my own</span><span class="meta">Tools for symptoms, a first real-world goal, and topics to read whenever you want.</span></button>' +
       '</div>' +
       '<button type="button" class="btn btn-primary btn-wide" data-action="setup-next" ' + (m ? '' : 'disabled') + '>Continue</button>' +
       '<p class="hint">Everything you enter is saved on this phone only and is not monitored by anyone. This app supports your care. It does not replace your clinical team. Call 911 or your local emergency number for chest pain, new weakness on one side, new trouble speaking or seeing, a severe headache, an injury, or a seizure that does not stop.</p></div>';
@@ -825,23 +810,11 @@ function viewPattern(){
     }).join('');
     h += '<div><button type="button" class="btn btn-quiet" data-action="pattern-save">Save and close</button></div>';
   }
-  var cp = courseProgress();
-  if (cp.next) h += '<section class="card"><p class="eyebrow">Go deeper</p><p>The course covers each of these in turn. Next for you: Session ' + cp.next.s.n + ', ' + esc(cp.next.s.title) + '.</p><div><button type="button" class="btn" data-action="course-open" data-n="' + cp.next.s.n + '">Open</button></div></section>';
+  h += '<section class="card"><p class="eyebrow">Go deeper</p><p>The Learn topics explain why patterns like these build up, and what tends to loosen them.</p><div><button type="button" class="btn" data-action="goto-learn">Open Learn</button></div></section>';
   return h + '</div>';
 }
 
 /* ---------- TODAY (need-first) ---------- */
-function courseProgress(){
-  var S = sessions(), total = 0, done = 0, next = null;
-  S.forEach(function(s){
-    total++; if (state.course.read[s.n]) done++; else if (!next) next = {s:s, what:'teach'};
-    (s.homework || []).forEach(function(h){
-      total++; var k = s.n + ':' + h.day;
-      if (state.course.done[k]) done++; else if (!next) next = {s:s, what:'hw', day:h.day, title:h.title};
-    });
-  });
-  return { total: total, done: done, next: next, pct: total ? Math.round(done / total * 100) : 0 };
-}
 function weekFeedback(){
   var wk = lastDays(7), prev = []; for (var i = 13; i >= 7; i--) prev.push(dayKey(addDays(new Date(), -i)));
   function inSet(set, ts){ return set.indexOf(dayKey(ts)) > -1; }
@@ -861,7 +834,7 @@ function weekFeedback(){
   return lines;
 }
 function viewToday(){
-  var k = dayKey(new Date()), ci = state.checkins[k] || {}, g = currentGoal(), ns = g ? nextStep(g) : null, cp = courseProgress(), courseDone = cp.total && !cp.next;
+  var k = dayKey(new Date()), ci = state.checkins[k] || {}, g = currentGoal(), ns = g ? nextStep(g) : null, lp = learnProgress();
   var MOOD = ['','Very low','Low','Okay','Good','Very good'], ENERGY = ['','Drained','Low','Okay','Good','High'];
   function scale(kind, label, words){
     var cur = ci[kind] || 0, b = '';
@@ -904,9 +877,10 @@ function viewToday(){
     }).join('') + '</div><div><button type="button" class="btn btn-quiet" data-action="goto-plan">Open plan</button></div></section>';
   }
 
-  if (sessions().length && guided()) {
-    if (courseDone) h += '<section class="card"><p class="eyebrow">Maintenance</p><p>You have finished the course. Check your maintenance plan once a week, and use the toolkit when you need it. Using the app less is a good sign.</p><div><button type="button" class="btn" data-action="course-open" data-n="10">My maintenance plan</button></div></section>';
-    else h += '<section class="card"><div class="item-head"><h2>Course</h2><span class="val">' + cp.pct + '%</span></div><div class="bar" aria-hidden="true"><span style="width:' + cp.pct + '%"></span></div><p class="meta">Next: Session ' + cp.next.s.n + ', ' + (cp.next.what === 'teach' ? 'read the session' : esc(cp.next.title)) + '.</p><div><button type="button" class="btn" data-action="course-open" data-n="' + cp.next.s.n + '"' + (cp.next.what === 'hw' ? ' data-day="' + cp.next.day + '"' : '') + '>Continue</button></div></section>';
+  if (lp.next) {
+    h += '<section class="card"><div class="item-head"><h2>Learn</h2><span class="val">' + lp.read + ' of ' + lp.total + ' read</span></div>' +
+         '<button type="button" class="learn-row" data-action="learn-open" data-id="' + lp.next.id + '">' + learnArt(lp.next.art, 'thumb') +
+         '<span class="learn-row-text"><span class="t">' + esc(lp.next.title) + '</span><span class="meta">' + esc(lp.next.sum) + '</span></span></button></section>';
   }
 
   h += '<section class="card card-alert"><h2>When to get urgent help</h2>' +
@@ -1326,8 +1300,9 @@ function panelBls(p){
         '<div class="row"><button type="button" class="btn btn-quiet btn-wide" data-action="bls-stop">Stop</button></div>' +
         '<p class="hint">Stop if your eyes ache or you start to feel dizzy or sick.</p></section></div>';
     }
-    return h + '<section class="card"><p class="bigtext">Let your eyes close, or rest them on one spot. Nothing to do but notice each chime, left, then right.</p>' +
-      '<div class="bls-ears" aria-hidden="true"><span class="bls-ear">Left</span><span class="bls-dot bls-dot-sm" id="blswave"></span><span class="bls-ear">Right</span></div>' +
+    return h + '<section class="card"><p class="bigtext">Follow the dot if you like, or let your eyes close. Each chime sounds in the ear on the side the dot has reached.</p>' +
+      '<div class="bls-track" id="blstrack" aria-hidden="true"><span class="bls-dot" id="blsdot"></span></div>' +
+      '<div class="bls-ears" aria-hidden="true"><span class="bls-ear">Left ear</span><span class="bls-ear">Right ear</span></div>' +
       '<p class="hint" style="text-align:center" id="blsleft"></p>' +
       '<div class="row"><button type="button" class="btn btn-quiet btn-wide" data-action="bls-stop">Stop</button></div>' +
       '<p class="hint">Keep the volume low. Stop if it becomes unpleasant or you start to feel dizzy.</p></section></div>';
@@ -1448,6 +1423,75 @@ function finishBreath(complete){
   render();
 }
 
+/* ---------- artwork ---------- */
+/* Small flat illustrations for the step-by-step tools and the Learn topics. They use the theme
+   colours through classes (see .art in styles.css), so they follow light and dark mode, and they
+   are decorative only: every one is aria-hidden and carries no information the text does not. */
+function art(vb, body, cls){ return '<svg class="art ' + (cls || '') + '" viewBox="' + vb + '" aria-hidden="true" focusable="false">' + body + '</svg>'; }
+var SENSE_ART = {
+  see: '<path class="ln" d="M150 60c14-20 30-30 46-30s32 10 46 30c-14 20-30 30-46 30s-32-10-46-30z" transform="translate(-26 0)"/><circle class="a" cx="170" cy="60" r="13"/><circle class="iv" cx="174" cy="56" r="4"/>',
+  feel: '<g class="ln"><path d="M150 92V62c0-5 7-5 7 0v-24c0-5 8-5 8 0v20-26c0-5 8-5 8 0v26-22c0-5 8-5 8 0v26-14c0-5 7-5 7 0v26c0 14-10 24-24 24h-4c-10 0-18-6-21-14l-8-20c-2-5 4-8 7-4z"/></g>',
+  hear: '<path class="ln" d="M160 84c0 8 8 10 12 4 3-5 6-8 10-13 6-7 8-12 8-19 0-14-10-24-22-24s-22 10-22 22"/><path class="ln" d="M160 58c0-6 5-10 10-10s10 4 10 10c0 4-4 7-7 9"/><path class="ln lnt" d="M202 44c5 5 5 27 0 32M212 36c9 9 9 39 0 48"/>',
+  smell: '<g transform="translate(170 64)"><circle class="t" cx="0" cy="-16" r="10"/><circle class="t" cx="15" cy="-5" r="10"/><circle class="t" cx="10" cy="13" r="10"/><circle class="t" cx="-10" cy="13" r="10"/><circle class="t" cx="-15" cy="-5" r="10"/><circle class="a" cx="0" cy="0" r="8"/></g><path class="ln" d="M170 86v22"/><path class="ln lnt" d="M196 30c4-4 0-8 4-12M206 36c4-4 0-8 4-12"/>',
+  taste: '<path class="ln" d="M152 34h40l-6 66h-28z"/><path class="s" d="M155 58h34l-4 40h-26z"/><path class="ln lnt" d="M200 40c6 0 8 6 8 10"/>'
+};
+function groundArt(step){
+  var keys = ['see','feel','hear','smell','taste'], n = 5 - step, dots = '';
+  for (var i = 0; i < n; i++) dots += '<circle class="t" cx="' + (34 + i * 16) + '" cy="96" r="5"/>';
+  return art('0 0 240 120', '<rect class="bg" x="0" y="0" width="240" height="120" rx="20"/><circle class="iv" cx="66" cy="52" r="32"/>' +
+    '<text class="num" x="66" y="66" text-anchor="middle">' + n + '</text>' + dots + SENSE_ART[keys[step]], 'art-step');
+}
+/* One smooth figure drawn once in a soft colour; the area being worked on is laid over it
+   in terracotta, clipped to the body's outline so it follows the shape. */
+var BODY_BASE = '<circle cx="60" cy="24" r="15"/><rect x="54" y="36" width="12" height="12" rx="4"/>' +
+  '<path d="M33 54Q60 42 87 54L85 92Q84 112 81 126H39Q36 112 35 92Z"/>' +
+  '<path class="limb" d="M35 58 27 90 23 118M85 58l8 32 4 28"/><circle cx="22" cy="124" r="7"/><circle cx="98" cy="124" r="7"/>' +
+  '<path class="limb thick" d="M49 124l-2 36M71 124l2 36"/><path class="limb" d="M47 160l-1 28M73 160l1 28"/>' +
+  '<ellipse cx="42" cy="194" rx="9" ry="5"/><ellipse cx="78" cy="194" rx="9" ry="5"/>';
+var BODY_PARTS = {
+  head:'<circle cx="60" cy="24" r="15"/>', neck:'<rect x="54" y="36" width="12" height="12" rx="4"/>',
+  shoulders:'<rect clip-path="url(#torsoClip)" x="20" y="40" width="80" height="20"/><circle cx="35" cy="58" r="5.5"/><circle cx="85" cy="58" r="5.5"/>',
+  chest:'<rect clip-path="url(#torsoClip)" x="20" y="58" width="80" height="29"/>',
+  stomach:'<rect clip-path="url(#torsoClip)" x="20" y="87" width="80" height="22"/>',
+  hips:'<rect clip-path="url(#torsoClip)" x="20" y="109" width="80" height="20"/>',
+  arms:'<path class="limb" d="M35 58 27 90 23 118M85 58l8 32 4 28"/>', hands:'<circle cx="22" cy="124" r="7"/><circle cx="98" cy="124" r="7"/>',
+  thighs:'<path class="limb thick" d="M49 124l-2 36M71 124l2 36"/>', calves:'<path class="limb" d="M47 160l-1 28M73 160l1 28"/>',
+  feet:'<ellipse cx="42" cy="194" rx="9" ry="5"/><ellipse cx="78" cy="194" rx="9" ry="5"/>'
+};
+function bodyArt(on){
+  var all = on === 'all', hi = '';
+  Object.keys(BODY_PARTS).forEach(function(k){ if (all || on.indexOf(k) > -1) hi += BODY_PARTS[k]; });
+  return art('-70 -6 260 212', '<defs><clipPath id="torsoClip"><path d="M33 54Q60 42 87 54L85 92Q84 112 81 126H39Q36 112 35 92Z"/></clipPath></defs>' +
+    '<rect class="bg" x="-70" y="-6" width="260" height="212" rx="20"/>' + (all ? '<circle class="glow" cx="60" cy="100" r="98"/>' : '') +
+    '<g class="part">' + BODY_BASE + '</g><g class="part on">' + hi + '</g>', 'art-step art-body');
+}
+var PMR_PARTS = [['hands'],['arms'],['shoulders'],['head'],['chest','stomach'],['thighs'],['calves','feet']];
+var SCAN_PARTS = [['feet','calves','thighs'],['hips'],['stomach'],['chest'],['shoulders','arms','hands'],['head','neck'],'all'];
+var SHIFT_ART = [
+  '<rect class="iv" x="70" y="32" width="100" height="56" rx="14"/><text class="num sm" x="120" y="68" text-anchor="middle">100 · 93 · 86</text>',
+  '<rect class="iv" x="54" y="36" width="40" height="48" rx="10"/><rect class="iv" x="100" y="36" width="40" height="48" rx="10"/><rect class="iv" x="146" y="36" width="40" height="48" rx="10"/><text class="num" x="74" y="72" text-anchor="middle">A</text><text class="num" x="120" y="72" text-anchor="middle">B</text><text class="num" x="166" y="72" text-anchor="middle">C</text>',
+  '<rect class="a" x="86" y="46" width="46" height="44" rx="8"/><path class="ln" d="M132 56c12 0 12 22 0 22"/><circle class="ln lnt" cx="150" cy="44" r="18"/><path class="ln lnt" d="M163 57l16 16"/>',
+  '<circle class="a" cx="92" cy="60" r="9"/><path class="ln" d="M112 42c10 10 10 26 0 36M128 32c16 16 16 40 0 56"/><path class="ln lnt" d="M144 22c22 22 22 54 0 76"/>',
+  '<g transform="translate(86 26)">' + '<path class="a" d="M14 62c-8-1-10-10-9-20 1-11 3-20 11-26 7-5 14 0 14 10 0 8-3 13-5 20s0 16-11 16z"/><circle class="a" cx="10" cy="10" r="4.5"/><circle class="a" cx="19" cy="6" r="4"/><circle class="a" cx="27" cy="7" r="3.5"/><circle class="a" cx="33" cy="11" r="3"/>' +
+    '<g transform="translate(36 8)"><path class="t" d="M14 62c-8-1-10-10-9-20 1-11 3-20 11-26 7-5 14 0 14 10 0 8-3 13-5 20s0 16-11 16z"/><circle class="t" cx="10" cy="10" r="4.5"/><circle class="t" cx="19" cy="6" r="4"/><circle class="t" cx="27" cy="7" r="3.5"/><circle class="t" cx="33" cy="11" r="3"/></g></g>',
+  '<path class="s" d="M40 100c30-30 70-36 160-24v24z"/><path class="a" d="M92 60l22-18 22 18v26H92z"/><rect class="iv" x="108" y="68" width="12" height="18" rx="2"/><circle class="t" cx="168" cy="40" r="10"/><path class="ln" d="M114 86c4 6 18 10 34 14"/>',
+  '<path class="ln" d="M104 82V40l40-8v42"/><circle class="a" cx="96" cy="84" r="10"/><circle class="a" cx="136" cy="76" r="10"/><path class="ln lnt" d="M164 44c6-4 12-2 14 4M170 30c10-6 20-2 22 8"/>',
+  '<rect class="a" x="84" y="24" width="44" height="76" rx="10"/><rect class="iv" x="90" y="34" width="32" height="52" rx="4"/><path class="t" d="M136 34h52a10 10 0 0 1 10 10v20a10 10 0 0 1-10 10h-30l-14 12v-12h-8a10 10 0 0 1-10-10V44a10 10 0 0 1 10-10z"/><circle class="iv" cx="152" cy="54" r="3"/><circle class="iv" cx="164" cy="54" r="3"/><circle class="iv" cx="176" cy="54" r="3"/>'
+];
+function shiftArt(i){ return art('0 0 240 120', '<rect class="bg" x="0" y="0" width="240" height="120" rx="20"/>' + (SHIFT_ART[i] || SHIFT_ART[0]), 'art-step'); }
+var TOPIC_ART = {
+  attention: '<path class="ln" d="M14 70c8 0 8-10 16-10s8 10 16 10 8-10 16-10"/><circle class="iv" cx="76" cy="54" r="30"/><circle class="ln" cx="76" cy="54" r="30"/><path class="ln lnt" d="M54 58c6 0 6-18 11-18s5 30 11 30 6-22 11-22 5 10 11 10"/><path class="ln" d="M98 76l18 18"/>',
+  agency: '<path class="s" d="M0 104c24-34 64-52 120-40v56H0z"/><path class="ln" d="M22 112c18-6 18-16 34-22s22-12 30-24" stroke-dasharray="3 7"/><path class="ln" d="M90 64V28"/><path class="t" d="M90 28h22l-6 8 6 8H90z"/><circle class="a" cx="30" cy="38" r="9"/>',
+  thinking: '<path class="iv" d="M14 24h56a10 10 0 0 1 10 10v24a10 10 0 0 1-10 10H40l-14 12V68H14a10 10 0 0 1-10-10V34a10 10 0 0 1 10-10z"/><path class="ln lnt" d="M18 46c6-12 12 12 18 0s10-10 14 0 8 8 14-4"/><path class="ln" d="M80 82h28M98 72l10 10-10 10"/><path class="ln" d="M44 94h40" />',
+  emotion: '<circle class="glow" cx="60" cy="56" r="40"/><circle class="t" cx="60" cy="52" r="14"/><path class="ln" d="M34 52c2 26 14 38 26 38s24-12 26-38"/><path class="ln" d="M24 50c-4 6-2 14 6 18M96 50c4 6 2 14-6 18"/><path class="ln lnt" d="M60 26v-8M42 32l-5-6M78 32l5-6"/>'
+};
+function learnArt(key, size){
+  return art('0 0 120 120', '<rect class="bg" x="0" y="0" width="120" height="120" rx="' + (size === 'thumb' ? 26 : 22) + '"/>' + (TOPIC_ART[key] || ''), 'art-topic art-' + size);
+}
+function logoSvg(cls, id){
+  return '<svg class="' + cls + '" viewBox="0 0 64 64" aria-hidden="true"><clipPath id="' + id + '"><circle cx="32" cy="32" r="30"/></clipPath><g clip-path="url(#' + id + ')"><rect width="64" height="64" fill="#DCE8DF"/><circle cx="41" cy="29" r="9" fill="#C9856B"/><path d="M-2 47C14 35 34 33 66 42V66H-2Z" fill="#24584F"/></g></svg>';
+}
+
 function panelGround(p){
   var h = '<div class="stack">' + backBtn('panel-close', 'Back to tools');
   if (p.step >= GROUND.length) {
@@ -1456,7 +1500,7 @@ function panelGround(p){
   }
   var g = GROUND[p.step];
   return h + '<section class="card"><div class="item-head"><span class="eyebrow">5-4-3-2-1 grounding</span><span class="val">Step ' + (p.step + 1) + ' of 5</span></div>' +
-    '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / 5 * 100) + '%"></span></div>' +
+    '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / 5 * 100) + '%"></span></div>' + groundArt(p.step) +
     '<div id="stepText"><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">' + esc(g[2]) + '</p></div>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +
     '<div class="row">' + (p.step > 0 ? '<button type="button" class="btn btn-quiet" data-action="ground-prev">Back</button>' : '') +
     '<button type="button" class="btn btn-primary" data-action="ground-next">' + (p.step === GROUND.length - 1 ? 'Finish' : 'Next') + '</button></div></section></div>';
@@ -1469,7 +1513,7 @@ function panelPMR(p){
   }
   var g = PMR[p.step];
   return h + '<section class="card"><div class="item-head"><span class="eyebrow">Progressive muscle relaxation</span><span class="val">' + (p.step + 1) + ' of ' + PMR.length + '</span></div>' +
-    '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / PMR.length * 100) + '%"></span></div>' +
+    '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / PMR.length * 100) + '%"></span></div>' + bodyArt(PMR_PARTS[p.step]) +
     '<div id="stepText"><h2>' + esc(g[0]) + '</h2><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">Tense for about 5 seconds, then release for 10 to 15 seconds. Keep breathing. Skip any area that hurts.</p></div>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +
     '<div class="row">' + (p.step > 0 ? '<button type="button" class="btn btn-quiet" data-action="pmr-prev">Back</button>' : '') +
     '<button type="button" class="btn btn-primary" data-action="pmr-next">' + (p.step === PMR.length - 1 ? 'Finish' : 'Next') + '</button></div></section></div>';
@@ -1482,7 +1526,7 @@ function panelScan(p){
   }
   var g = BODYSCAN[p.step];
   return h + '<section class="card"><div class="item-head"><span class="eyebrow">Body scan</span><span class="val">' + (p.step + 1) + ' of ' + BODYSCAN.length + '</span></div>' +
-    '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / BODYSCAN.length * 100) + '%"></span></div>' +
+    '<div class="bar" aria-hidden="true"><span style="width:' + Math.round((p.step + 1) / BODYSCAN.length * 100) + '%"></span></div>' + bodyArt(SCAN_PARTS[p.step]) +
     '<div id="stepText"><h2>' + esc(g[0]) + '</h2><p class="bigtext">' + esc(g[1]) + '</p><p class="hint">Take two or three slow breaths here before moving on. There is no right thing to feel.</p></div>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +
     '<div class="row">' + (p.step > 0 ? '<button type="button" class="btn btn-quiet" data-action="scan-prev">Back</button>' : '') +
     '<button type="button" class="btn btn-primary" data-action="scan-next">' + (p.step === BODYSCAN.length - 1 ? 'Finish' : 'Next') + '</button></div></section></div>';
@@ -1527,7 +1571,7 @@ function panelShift(p){
     return h + panelAfter(p, '<p>Nicely done.</p>') + '<div class="row"><button type="button" class="btn btn-quiet" data-action="panel-close">Done</button></div></section></div>';
   }
   return h + '<section class="card"><p class="hint">When symptoms flare, watching them closely can keep them going. Giving your mind a job can help. This is not about ignoring how you feel. It is a way to let your system settle.</p>' +
-    '<p class="bigtext" id="stepText">' + esc(SHIFTS[p.i]) + '</p>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +'<div class="row"><button type="button" class="btn" data-action="shift-next">Another idea</button><button type="button" class="btn btn-primary" data-action="shift-done">I did it</button></div></section></div>';
+    shiftArt(p.i) + '<p class="bigtext" id="stepText">' + esc(SHIFTS[p.i]) + '</p>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +'<div class="row"><button type="button" class="btn" data-action="shift-next">Another idea</button><button type="button" class="btn btn-primary" data-action="shift-done">I did it</button></div></section></div>';
 }
 function findEx(id){ return EXERCISES.filter(function(x){ return x.id === id; })[0]; }
 function panelMove(p){
@@ -1536,12 +1580,97 @@ function panelMove(p){
     '<section class="card"><div id="stepText"><p class="lbl">' + esc(x.dose) + '</p><ol class="prose" style="margin:0; padding-left:22px">' + x.steps.map(function(s){ return '<li>' + esc(s) + '</li>'; }).join('') + '</ol>' +
     '<p><strong>Tip:</strong> ' + esc(x.tip) + '</p></div>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>';
   if (x.standing) h += '<p class="hint">Only do standing exercises if your physiotherapist or doctor has said they are safe for you. Keep a counter or sturdy chair within reach.</p>';
-  h += '<p class="hint">Stop if you feel sharp pain, chest pain or faint.</p></section>' +
+  h += '<p class="hint">Stop if you feel sharp pain, chest pain or faint.</p></section>';
+  if (x.id === 'walk') h += walkMetronome(p);
+  h += '' +
     '<section class="card"><p class="eyebrow">Optional timer</p><div class="exnum" id="extime">' + (p.exRunning ? '' : Math.floor(secs / 60) + ':' + pad(secs % 60)) + '</div>' +
     '<div class="row">' + (p.exRunning ? '<button type="button" class="btn btn-quiet" data-action="ex-stop">Stop timer</button>' : '<button type="button" class="btn" data-action="ex-start">Start timer</button>') +
     '<button type="button" class="btn btn-primary" data-action="ex-done">Mark done</button></div></section></div>';
   return h;
 }
+/* ---------- rhythm walk metronome ---------- */
+/* An optional beat to walk to, one beat per step: a higher tock for one foot and a lower one
+   for the other, like the two sides of a wooden metronome. The sound is built the way a
+   woodblock sounds: a very short, slightly pitch-dropping tone for the body of the knock,
+   a quieter inharmonic overtone, and a click of filtered noise for the strike itself.
+   Beats are scheduled ahead on the audio clock, not by timers, so the tempo stays even. */
+var WALK_MIN = 50, WALK_MAX = 130, metro = { next:0, beat:0, timer:null, noise:null };
+function walkMetronome(p){
+  return '<section class="card"><div class="item-head"><h2>Walking beat</h2><span class="tag">Optional</span></div>' +
+    '<p class="hint">A steady tick and tock to step to. Let your feet land on the beat and keep your eyes ahead. Headphones are not needed.</p>' +
+    '<div class="walk-feet" aria-hidden="true"><span class="foot" id="footL">' + footSvg(false) + '<span>Tick</span></span><span class="foot" id="footR">' + footSvg(true) + '<span>Tock</span></span></div>' +
+    '<div class="field"><div class="lbl-row"><label class="lbl" for="bpm">Speed</label><span class="val" id="bpmVal">' + p.bpm + ' steps a minute</span></div>' +
+    '<div class="bpm-row"><button type="button" class="btn btn-quiet bpm-step" data-action="bpm-step" data-val="-5" aria-label="Slower">−</button>' +
+    '<input type="range" id="bpm" min="' + WALK_MIN + '" max="' + WALK_MAX + '" step="1" value="' + p.bpm + '" data-bpm="1">' +
+    '<button type="button" class="btn btn-quiet bpm-step" data-action="bpm-step" data-val="5" aria-label="Faster">+</button></div>' +
+    '<div class="anchors"><span>Slow, ' + WALK_MIN + '</span><span>Brisk, ' + WALK_MAX + '</span></div>' +
+    '<p class="hint">Start slower than feels natural. Around 80 to 100 suits most people at first.</p></div>' +
+    '<button type="button" class="btn ' + (p.metro ? 'btn-quiet' : 'btn-primary') + ' btn-wide" data-action="metro-toggle">' + (p.metro ? 'Stop the beat' : 'Start the beat') + '</button></section>';
+}
+function footSvg(right){
+  return '<svg viewBox="0 0 40 64" width="52" height="82"><g' + (right ? ' transform="translate(40 0) scale(-1 1)"' : '') + '>' +
+    '<path d="M12 60c-6-1-8-8-7-16 1-9 2-17 9-22 6-4 12 0 12 8 0 7-3 11-4 17-1 6 0 13-10 13z"/>' +
+    '<circle cx="9" cy="12" r="4.2"/><circle cx="17" cy="8" r="3.6"/><circle cx="24" cy="9" r="3.2"/><circle cx="29" cy="13" r="2.8"/><circle cx="32" cy="19" r="2.4"/></g></svg>';
+}
+function noiseBuffer(){
+  if (metro.noise) return metro.noise;
+  var len = Math.floor(audioCtx.sampleRate * 0.05), b = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = b.getChannelData(0);
+  for (var i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len);
+  metro.noise = b; return b;
+}
+function woodKnock(t, high){
+  var f = high ? 1660 : 1080, c = audioCtx;
+  function tone(freq, peak, decay){
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(freq * 1.06, t);
+    o.frequency.exponentialRampToValueAtTime(freq, t + 0.015);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + 0.0015);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+    o.connect(g); g.connect(audioMaster); o.start(t); o.stop(t + decay + 0.02);
+  }
+  tone(f, high ? 0.42 : 0.46, 0.085);
+  tone(f * 2.71, high ? 0.07 : 0.08, 0.035);
+  var n = c.createBufferSource(), bp = c.createBiquadFilter(), ng = c.createGain();
+  n.buffer = noiseBuffer(); bp.type = 'bandpass'; bp.frequency.value = f * 1.6; bp.Q.value = 4;
+  ng.gain.setValueAtTime(0.0001, t); ng.gain.exponentialRampToValueAtTime(0.28, t + 0.001); ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.018);
+  n.connect(bp); bp.connect(ng); ng.connect(audioMaster); n.start(t); n.stop(t + 0.03);
+}
+function lightFoot(high, delayMs){
+  setTimeout(function(){
+    var on = $(high ? '#footL' : '#footR'), off = $(high ? '#footR' : '#footL');
+    if (on) on.classList.add('on'); if (off) off.classList.remove('on');
+  }, Math.max(0, delayMs));
+}
+function metroRunning(){ return !!metro.timer; }
+function startMetro(){
+  if (!audioReady()) return false;
+  try { var t0 = audioCtx.currentTime; audioMaster.gain.cancelScheduledValues(t0); audioMaster.gain.setValueAtTime(0.9, t0); } catch(e){}
+  stopMetro();
+  metro.next = audioCtx.currentTime + 0.1; metro.beat = 0;
+  metro.timer = setInterval(function(){
+    var q = ui.panel;
+    if (!q || q.type !== 'move' || q.id !== 'walk' || !q.metro) { stopMetro(); return; }
+    var spb = 60 / Math.max(WALK_MIN, Math.min(WALK_MAX, q.bpm || 90));
+    while (metro.next < audioCtx.currentTime + 0.12) {
+      var high = metro.beat % 2 === 0;
+      woodKnock(metro.next, high);
+      lightFoot(high, (metro.next - audioCtx.currentTime) * 1000);
+      metro.next += spb; metro.beat++;
+    }
+  }, 25);
+  return true;
+}
+function stopMetro(){ if (metro.timer) { clearInterval(metro.timer); metro.timer = null; } }
+function setBpm(v){
+  var p = ui.panel; if (!p) return;
+  p.bpm = Math.max(WALK_MIN, Math.min(WALK_MAX, Math.round(v)));
+  var lbl = $('#bpmVal'), r = $('#bpm');
+  if (lbl) lbl.textContent = p.bpm + ' steps a minute';
+  if (r && +r.value !== p.bpm) r.value = p.bpm;
+}
+
 function startExLoop(){
   var p = ui.panel, el = $('#extime');
   function tick(){
@@ -1553,100 +1682,80 @@ function startExLoop(){
   if (p.exRunning) timers.ex = setInterval(tick, 250);
 }
 
-/* ---------- COURSE ---------- */
-function hwKey(s, h){ return s.n + ':' + h.day; }
-function hwTitle(h){ return h.day === 0 ? 'Exercise: ' + h.title : 'Day ' + h.day + ': ' + h.title; }
-function viewCourse(){
+/* ---------- LEARN ---------- */
+/* Four topics to read and reflect on (learn.js), plus the short quick reads. Reflections are
+   saved as the patient types, stay on the phone, and only reach the clinic report when the
+   patient ticks the box for them on the share screen. */
+function learnTopics(){ return window.LEARN_TOPICS || []; }
+function findTopic(id){ return learnTopics().filter(function(t){ return t.id === id; })[0]; }
+function learnProgress(){
+  var T = learnTopics(), read = T.filter(function(t){ return state.learn.read[t.id]; }).length;
+  return { total:T.length, read:read, next:T.filter(function(t){ return !state.learn.read[t.id]; })[0] || null };
+}
+function reflectionCount(){ var n = 0, A = state.learn.answers; for (var k in A) if (A[k] && String(A[k]).trim()) n++; return n; }
+function topicAnswered(t){ return t.reflect.filter(function(r){ var v = state.learn.answers[r.id]; return v && String(v).trim(); }).length; }
+function viewLearn(){
   if (ui.lesson) return viewLesson();
-  if (ui.session) {
-    var s = findSession(ui.session); if (!s) { ui.session = null; }
-    else if (ui.hw !== null) return viewHomework(s);
-    else return viewSession(s);
-  }
-  var S = sessions(), cp = courseProgress();
-  var h = '<div class="stack"><h1>Course</h1>';
-  if (!S.length) return h + '<section class="card"><p class="hint">Course content is not loaded.</p></section></div>';
-  h += '<section class="card"><p>Ten sessions from the FND psychotherapy workbook, adapted for working on your own. Read the session, then do the homework over the following days. There is no deadline.</p>' +
-       '<div class="bar" aria-hidden="true"><span style="width:' + cp.pct + '%"></span></div><p class="meta">' + cp.done + ' of ' + cp.total + ' parts complete</p></section>';
-  var PH = { 1:'Phase 1: Understanding and engagement', 4:'Phase 2: Active change', 8:'Phase 3: Independence and relapse prevention' };
-  h += '<div class="stack-s">' + S.map(function(s){
-    var phase = PH[s.n] ? '<p class="eyebrow" style="margin-top:6px">' + PH[s.n] + '</p>' : '';
-    var hwN = (s.homework || []).length, hwDone = (s.homework || []).filter(function(x){ return state.course.done[hwKey(s, x)]; }).length;
-    var read = !!state.course.read[s.n], all = read && hwDone === hwN;
-    return phase + '<button type="button" class="tool-btn" data-action="course-open" data-n="' + s.n + '"><span class="sess"><span class="sess-n ' + (all ? 'done' : '') + '">' + (all ? '✓' : s.n) + '</span><span class="sess-body"><span class="t">' + esc(s.title) + '</span><span class="meta">' + esc(s.tagline || '') + '</span><span class="meta">' + (read ? 'Read' : s.minutes + ' min read') + ' · homework ' + hwDone + ' of ' + hwN + '</span></span></span></button>';
+  if (ui.learnTopic) { var t = findTopic(ui.learnTopic); if (t) return viewTopic(t); ui.learnTopic = null; }
+  var T = learnTopics(), lp = learnProgress();
+  var h = '<section class="card"><p>Short topics about how FND works and what helps, each with a few questions to reflect on. Read them in any order, as often as you like.</p>' +
+          (guided() ? '<p class="hint">If something here connects with your own experience, it may be worth bringing to your next appointment.</p>' : '') + '</section>';
+  if (!T.length) return h + '<section class="card"><p class="hint">The topics have not loaded. Close the app and open it again.</p></section>';
+  h += '<div class="stack-s">' + T.map(function(t){
+    var read = !!state.learn.read[t.id], ans = topicAnswered(t);
+    return '<button type="button" class="learn-row" data-action="learn-open" data-id="' + t.id + '">' + learnArt(t.art, 'thumb') +
+      '<span class="learn-row-text"><span class="t">' + esc(t.title) + '</span><span class="meta">' + esc(t.sum) + '</span>' +
+      '<span class="meta learn-status">' + t.mins + ' min read' + (read ? ' · Read' : '') + (ans ? ' · ' + ans + ' of ' + t.reflect.length + ' reflections' : '') + '</span></span></button>';
   }).join('') + '</div>';
   h += '<h2>Quick reads</h2><div class="stack-s">' + LESSONS.map(function(l){
-    return '<button type="button" class="tool-btn" data-action="lesson-open" data-id="' + l.id + '"><span class="item-head"><span class="t">' + esc(l.title) + '</span>' + (state.read[l.id] ? '<span class="pill pill-good">Read</span>' : '<span class="meta">' + l.mins + ' min</span>') + '</span><span class="meta">' + esc(l.sum) + '</span></button>';
+    return '<button type="button" class="tool-btn" data-action="lesson-open" data-id="' + l.id + '"><span class="item-head"><span class="t">' + esc(l.title) + '</span>' + (state.read[l.id] ? '<span class="tag">Read</span>' : '') + '</span><span class="meta">' + esc(l.sum) + ', ' + l.mins + ' min</span></button>';
   }).join('') + '</div>';
-  h += '<section class="card"><p class="hint">This course is general information adapted from a clinical workbook. It is not a substitute for therapy. If something here does not fit your situation, talk it through with your care team.</p></section></div>';
+  h += '<section class="card"><p class="hint">This is general information, not a substitute for treatment. If something you read is upsetting, stop, use a grounding tool, and talk to your clinician.</p></section>';
   return h;
 }
-function viewSession(s){
-  var read = !!state.course.read[s.n], h = '<div class="stack">' + backBtn('course-close', 'All sessions');
-  h += '<div><p class="eyebrow">Session ' + s.n + ' of ' + sessions().length + '</p><h1>' + esc(s.title) + '</h1><p class="meta">About ' + s.minutes + ' min to read</p></div>';
-  var blocks = (s.teach || []), full = ui.fullTeach || read || blocks.length <= 2, shown = full ? blocks : blocks.slice(0, 1);
-  h += '<section class="card"><div class="row"><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="teachText">Read aloud</button></div><div class="prose" id="teachText">' + shown.map(function(b){
-    if (b.quote) return '<blockquote>' + esc(b.quote) + '</blockquote>';
-    var o = b.h ? '<h2>' + esc(b.h) + '</h2>' : '';
-    o += (b.p || []).map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('');
-    if (b.bullets && b.bullets.length) o += '<ul>' + b.bullets.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>';
-    return o;
-  }).join('') + '</div>' + (full ? '' : '<div><button type="button" class="btn" data-action="teach-full">Read the full session (' + (blocks.length - 1) + ' more parts)</button></div>') +
-  '<div><button type="button" class="btn ' + (read ? 'btn-quiet' : 'btn-primary') + '" data-action="session-read" data-n="' + s.n + '">' + (read ? 'Marked as read' : 'Mark as read') + '</button></div></section>';
-  if (s.practice) h += '<section class="card card-accent"><p class="eyebrow">Practise this week</p><p>' + esc(s.practice) + '</p><div class="row"><button type="button" class="btn" data-action="goto-tools">Open the tools</button></div></section>';
-  if (s.tracking) h += '<section class="card"><p class="eyebrow">Tracking for this session</p><p>The workbook\'s daily symptom log, grounding activity record and weekly summary are live trackers in this app, so you fill them in once and they build up over time.</p><div class="row"><button type="button" class="btn" data-action="goto-track" data-sub="episodes">Symptom log</button><button type="button" class="btn" data-action="goto-track" data-sub="grounding">Grounding record</button></div></section>';
-  var hw = s.homework || [];
-  if (hw.length) {
-    h += '<h2>Homework</h2><div class="stack-s">' + hw.map(function(x, i){
-      var done = !!state.course.done[hwKey(s, x)];
-      return '<button type="button" class="tool-btn" data-action="hw-open" data-n="' + s.n + '" data-i="' + i + '"><span class="item-head"><span class="t">' + esc(hwTitle(x)) + '</span>' + (done ? '<span class="pill pill-good">Done</span>' : '<span class="meta">' + x.fields.filter(function(f){ return f.type !== 'note'; }).length + ' prompts</span>') + '</span></button>';
-    }).join('') + '</div>';
-  }
-  var next = findSession(s.n + 1), prev = findSession(s.n - 1);
-  h += '<div class="row">' + (prev ? '<button type="button" class="btn btn-quiet" data-action="course-open" data-n="' + prev.n + '">Session ' + prev.n + '</button>' : '') + (next ? '<button type="button" class="btn btn-quiet" data-action="course-open" data-n="' + next.n + '">Session ' + next.n + '</button>' : '') + '</div>';
-  return h + '</div>';
+function topicSection(sec){
+  var h = '<h2>' + esc(sec.h) + '</h2>' + (sec.p || []).map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('');
+  if (sec.bullets) h += '<ul>' + sec.bullets.map(function(b){ return '<li>' + esc(b) + '</li>'; }).join('') + '</ul>';
+  if (sec.cards) h += '<div class="trap-list">' + sec.cards.map(function(c){
+    return '<div class="trap"><p class="trap-name">' + esc(c.name) + '</p><p class="trap-what">' + esc(c.what) + '</p>' +
+      '<p class="trap-ex"><span class="lbl-inline">The trap: </span>“' + esc(c.ex) + '”</p><p class="trap-bal"><span class="lbl-inline">More balanced: </span>“' + esc(c.bal) + '”</p></div>';
+  }).join('') + '</div>';
+  if (sec.note) h += '<p class="learn-note">' + esc(sec.note) + '</p>';
+  return h;
 }
-function viewHomework(s){
-  var hw = s.homework[ui.hw]; if (!hw) { ui.hw = null; return viewSession(s); }
-  var A = state.course.answers, done = !!state.course.done[hwKey(s, hw)];
-  var h = '<div class="stack">' + backBtn('hw-close', 'Session ' + s.n) + '<div><p class="eyebrow">Session ' + s.n + ' homework</p><h1>' + esc(hwTitle(hw)) + '</h1></div>';
-  h += '<section class="card">' + (hw.intro ? '<p>' + esc(hw.intro) + '</p>' : '');
-  h += hw.fields.map(function(f){
-    var v = A[f.id];
-    if (f.type === 'note') return '<p class="hint">' + esc(f.label) + '</p>';
-    if (f.type === 'long') return textField('course', f.id, f.label, v || '', 3, f.hint || '');
-    if (f.type === 'text') return lineField('course', f.id, f.label, v || '', f.hint || '');
-    if (f.type === 'number') return lineField('course', f.id, f.label, v == null ? '' : v, f.hint || '', 'number');
-    if (f.type === 'scale') {
-      var min = f.min != null ? f.min : 0, max = f.max != null ? f.max : 10, cur = v == null ? -999 : +v;
-      return '<div class="field"><div class="lbl-row"><span class="lbl">' + esc(f.label) + '</span><span class="val">' + (v == null ? 'Not set' : v) + '</span></div>' + (f.hint ? '<p class="hint">' + esc(f.hint) + '</p>' : '') + scaleButtons('course', f.id, min, max, cur, true) +
-        (f.anchors ? '<div class="anchors"><span>' + min + ' ' + esc(f.anchors[0]) + '</span><span>' + max + ' ' + esc(f.anchors[1]) + '</span></div>' : '') + '</div>';
-    }
-    if (f.type === 'check') return '<div class="field"><span class="lbl">' + esc(f.label) + '</span>' + (f.hint ? '<p class="hint">' + esc(f.hint) + '</p>' : '') + chipGroup('course', f.id, f.options || [], Array.isArray(v) ? v : []) + '</div>';
-    if (f.type === 'choice') return '<div class="field"><span class="lbl">' + esc(f.label) + '</span>' + (f.hint ? '<p class="hint">' + esc(f.hint) + '</p>' : '') + radioGroup('course', f.id, f.options || [], v || '') + '</div>';
-    return '';
-  }).join('');
-  h += '</section>';
-  h += '<div class="sticky-actions row"><button type="button" class="btn ' + (done ? 'btn-quiet' : 'btn-primary') + '" data-action="hw-done" data-n="' + s.n + '" data-i="' + ui.hw + '">' + (done ? 'Marked as done' : 'Mark as done') + '</button>' +
-       (ui.hw + 1 < s.homework.length ? '<button type="button" class="btn btn-quiet" data-action="hw-open" data-n="' + s.n + '" data-i="' + (ui.hw + 1) + '">Next homework</button>' : '<button type="button" class="btn btn-quiet" data-action="hw-close">Back to session</button>') + '</div>';
-  h += '<p class="hint">Answers save as you type. They are included when you share a report with your clinic.</p>';
-  return h + '</div>';
+function viewTopic(t){
+  var T = learnTopics(), i = T.indexOf(t), next = T[i + 1], read = !!state.learn.read[t.id], A = state.learn.answers;
+  var h = backBtn('learn-close', 'All topics') +
+    '<div class="learn-hero">' + learnArt(t.art, 'hero') + '</div>' +
+    '<div><p class="eyebrow">Learn · ' + t.mins + ' min read</p><h1>' + esc(t.title) + '</h1><p class="meta">' + esc(t.sum) + '</p></div>';
+  if (t.care) h += '<section class="card card-care"><p>' + esc(t.care) + '</p><div class="row"><button type="button" class="btn btn-quiet" data-action="open-tool" data-type="ground">Ground myself now</button></div></section>';
+  h += '<section class="card"><div class="row"><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="learnText">Read aloud</button></div>' +
+       '<div class="prose learn-prose" id="learnText">' + t.sections.map(topicSection).join('') + '</div></section>';
+  if (t.tools && t.tools.length) h += '<section class="card"><h2>Put it into practice</h2><div class="row">' + t.tools.map(function(x){
+    return '<button type="button" class="btn" data-action="' + x[0] + '"' + (x[1] ? ' data-type="' + x[1] + '"' : '') + '>' + esc(x[2]) + '</button>';
+  }).join('') + '</div></section>';
+  h += '<section class="card"><h2>Reflect</h2><p class="hint">Optional. Write as much or as little as you like, now or another day. Your answers are saved as you type and stay on this phone. They are only included in a report to your clinic if you choose to include them when you share.</p>' +
+       t.reflect.map(function(r){ return textField('learn', r.id, r.q, A[r.id] || '', 3, r.hint || ''); }).join('') + '</section>';
+  h += '<div class="row"><button type="button" class="btn ' + (read ? 'btn-quiet' : 'btn-primary') + '" data-action="learn-read" data-id="' + t.id + '">' + (read ? 'Marked as read' : 'Mark as read') + '</button>' +
+       (next ? '<button type="button" class="btn btn-quiet" data-action="learn-open" data-id="' + next.id + '">Next: ' + esc(next.title) + '</button>' : '') + '</div>';
+  if (t.sources && t.sources.length) h += '<details class="card sources"><summary>Where this comes from</summary><ul>' + t.sources.map(function(x){ return '<li>' + esc(x) + '</li>'; }).join('') + '</ul></details>';
+  return h;
 }
 function viewLesson(){
   var l = LESSONS.filter(function(x){ return x.id === ui.lesson; })[0];
-  if (!l) { ui.lesson = null; return viewCourse(); }
+  if (!l) { ui.lesson = null; return viewLearn(); }
   var read = !!state.read[l.id];
-  return '<div class="stack">' + backBtn('lesson-close', 'Course') + '<h1>' + esc(l.title) + '</h1>' +
+  return backBtn('lesson-close', 'All topics') + '<h1>' + esc(l.title) + '</h1>' +
     '<section class="card"><div class="row"><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="lessonText">Read aloud</button></div><div class="prose" id="lessonText">' + l.body.map(function(p){ return '<p>' + esc(p) + '</p>'; }).join('') + '</div></section>' +
-    '<div class="row"><button type="button" class="btn ' + (read ? 'btn-quiet' : 'btn-primary') + '" data-action="lesson-read" data-id="' + l.id + '">' + (read ? 'Marked as read' : 'Mark as read') + '</button></div></div>';
+    '<div class="row"><button type="button" class="btn ' + (read ? 'btn-quiet' : 'btn-primary') + '" data-action="lesson-read" data-id="' + l.id + '">' + (read ? 'Marked as read' : 'Mark as read') + '</button></div>';
 }
 
 /* ---------- MY PATH ---------- */
 function viewPath(){
-  var g = guided(), cur = ui.sub.path || (g ? 'course' : 'goals');
-  var segs = g ? [['course','Course'],['goals','Goals'],['pacing','Pacing'],['daily','Today'],['flare','Flare plan']] : [['goals','Goals'],['pacing','Pacing'],['daily','Today'],['flare','Flare plan'],['course','Course']];
+  var cur = ui.sub.path === 'course' ? 'learn' : (ui.sub.path || 'goals');
+  var segs = [['goals','Goals'],['pacing','Pacing'],['daily','Today'],['flare','Flare plan'],['learn','Learn']];
   var h = '<div class="stack"><h1>My path</h1>' + seg('path', segs, cur);
-  if (cur === 'course') { if (!g) h += '<section class="card"><p class="hint">You are in independent use. The course stays here as a reference; nothing in it is required.</p></section>'; h += viewCourse().replace('<h1>Course</h1>', ''); }
+  if (cur === 'learn') h += viewLearn();
   else if (cur === 'goals') h += viewGoals();
   else if (cur === 'pacing') h += viewPacing();
   else if (cur === 'daily') h += viewPlanToday();
@@ -1745,12 +1854,14 @@ function viewExport(){
   h += '<section class="card"><p>Build a report from your entries and send it with the share sheet: email, AirDrop, Messages, or save to Files. Nothing is sent until you choose where it goes.</p>' +
     '<div class="field"><span class="lbl">Time period</span><div class="chips" role="group">' + [[14,'Last 2 weeks'],[28,'Last 4 weeks'],[84,'Last 12 weeks'],[0,'Everything']].map(function(r){
       return '<button type="button" class="chip chip-radio" aria-pressed="' + (e.range === r[0]) + '" data-action="exp-range" data-val="' + r[0] + '">' + r[1] + '</button>';
-    }).join('') + '</div><p class="hint">Course homework answers are always included in full.</p></div>' +
+    }).join('') + '</div></div>' +
     '<div class="field"><span class="lbl">What to send</span><div class="chips" role="group">' +
       '<button type="button" class="chip" aria-pressed="' + e.pdf + '" data-action="exp-toggle" data-key="pdf">PDF report, easy to read</button>' +
       '<button type="button" class="chip" aria-pressed="' + e.csv + '" data-action="exp-toggle" data-key="csv">CSV files, for spreadsheets</button>' +
       '<button type="button" class="chip" aria-pressed="' + e.backup + '" data-action="exp-toggle" data-key="backup">Backup file, to restore on a new phone</button>' +
     '</div></div>' +
+    (reflectionCount() ? '<div class="field"><span class="lbl">Your Learn reflections</span><label class="check-row"><input type="checkbox" data-exp-reflect="1"' + (e.reflect ? ' checked' : '') + '> Include my written reflections in this report</label>' +
+      '<p class="hint">Off by default. Your reflections are private unless you tick this. You have answered ' + reflectionCount() + ' reflection question' + (reflectionCount() === 1 ? '' : 's') + '.</p></div>' : '') +
     '<button type="button" class="btn btn-primary btn-wide" data-action="exp-share" ' + (e.busy || !(e.pdf || e.csv || e.backup) ? 'disabled' : '') + '>' + (e.busy ? 'Preparing…' : 'Share') + '</button>';
   if (e.links) {
     h += '<p class="hint">Sharing is not available in this browser, so here are the files to save instead.</p><div class="row">' + e.links.map(function(l){
@@ -1758,7 +1869,7 @@ function viewExport(){
     }).join('') + '</div>';
   }
   h += '</section>';
-  h += '<section class="card"><h2>What is in the report</h2><ul class="prose" style="padding-left:22px"><li>Summary: episodes, average severity, common triggers and warning signs, what helped</li><li>Symptom log, one entry per episode</li><li>Grounding activity record with stress before and after</li><li>Weekly summaries and daily mood and energy check-ins</li><li>Thought records</li><li>Pacing goals and activity minutes</li><li>Course homework answers</li></ul>' +
+  h += '<section class="card"><h2>What is in the report</h2><ul class="prose" style="padding-left:22px"><li>Summary: episodes, average severity, common triggers and warning signs, what helped</li><li>Symptom log, one entry per episode</li><li>Grounding activity record with stress before and after</li><li>Weekly summaries and daily mood and energy check-ins</li><li>Thought records</li><li>Your Learn reflections, only if you tick the box above</li><li>Pacing goals and activity minutes</li><li>Course homework answers</li></ul>' +
        '<p class="hint">The report carries no name. Add your name in the message when you send it, or your clinic may ask you to.</p></section>';
   return h + '</div>';
 }
@@ -1795,12 +1906,11 @@ function buildCSVs(days){
   out.push({ name:'pattern-checks.csv', text: csv([['date_time','patterns']].concat(pt.map(function(x){ return [fmtISO(x.ts), x.items]; }))) });
   var act = state.activity.filter(function(a){ return inRange(a.ts, days); });
   out.push({ name:'activity.csv', text: csv([['date_time','kind','label','minutes']].concat(act.map(function(a){ return [fmtISO(a.ts), a.kind, a.label, a.minutes]; }))) });
-  var rows = [['session','homework','field','question','answer']];
-  sessions().forEach(function(s){ (s.homework || []).forEach(function(h){ h.fields.forEach(function(f){
-    if (f.type === 'note') return; var v = state.course.answers[f.id]; if (v == null || v === '' || (Array.isArray(v) && !v.length)) return;
-    rows.push([s.n, hwTitle(h), f.id, f.label, v]);
-  }); }); });
-  out.push({ name:'course-homework.csv', text: csv(rows) });
+  if (ui.exp.reflect) {
+    var rows = [['topic','question','answer']];
+    learnTopics().forEach(function(t){ t.reflect.forEach(function(r){ var v = state.learn.answers[r.id]; if (v && String(v).trim()) rows.push([t.title, r.q, v]); }); });
+    out.push({ name:'learn-reflections.csv', text: csv(rows) });
+  }
   return out;
 }
 function buildPDF(days){
@@ -1857,7 +1967,7 @@ function buildPDF(days){
   var act = state.activity.filter(function(a){ return inRange(a.ts, days) && a.kind !== 'calm'; });
   kv('Activity minutes logged', act.reduce(function(s,a){ return s + a.minutes; }, 0));
   state.goals.forEach(function(g){ var met = lastDays(days || 28).filter(function(d){ return goalMins(g, d) >= g.target; }).length; kv('Pacing goal "' + g.name + '"', g.target + ' min a day, met on ' + met + ' days'); });
-  var cp = courseProgress(); if (cp.total) kv('Course progress', cp.pct + '% (' + cp.done + ' of ' + cp.total + ' parts)');
+  var lpr = learnProgress(); if (lpr.total) kv('Learn topics read', lpr.read + ' of ' + lpr.total);
   kv('Thought records completed', state.thoughts.filter(function(t){ return inRange(t.ts, days); }).length);
 
   var wk = Object.keys(state.weeks).sort().filter(function(k){ return inRange(parseKey(k).getTime() + 6 * 86400000, days); });
@@ -1886,19 +1996,16 @@ function buildPDF(days){
   var th = state.thoughts.filter(function(t){ return inRange(t.ts, days); });
   if (th.length) { h2('Thought records'); th.slice().sort(function(a,b){ return a.ts - b.ts; }).forEach(function(t){ h3(fmtWhen(t.ts)); kv('Situation', t.situation); kv('Thought', t.thought); kv('Feelings', t.emotions); kv('Feeling strength before', t.before + '%'); kv('Thinking traps', t.traps); kv('Supports the thought', t.evFor); kv('Does not fit', t.evAgainst); kv('Fairer thought', t.balanced); kv('Feeling strength after', t.after + '%'); }); }
 
-  var any = false;
-  sessions().forEach(function(s){
-    var blocks = [];
-    (s.homework || []).forEach(function(h){
-      var lines = [];
-      h.fields.forEach(function(f){ if (f.type === 'note') return; var v = state.course.answers[f.id]; if (v == null || v === '' || (Array.isArray(v) && !v.length)) return; lines.push([f.label, v]); });
-      if (lines.length) blocks.push({ h:h, lines:lines });
+  if (ui.exp.reflect && reflectionCount()) {
+    h2('Learn reflections');
+    p('Shared at the patient\'s choice.', 9.5, 'italic');
+    learnTopics().forEach(function(t){
+      var lines = t.reflect.filter(function(r){ var v = state.learn.answers[r.id]; return v && String(v).trim(); });
+      if (!lines.length) return;
+      h3(t.title);
+      lines.forEach(function(r){ kv(r.q, state.learn.answers[r.id]); });
     });
-    if (!blocks.length) return;
-    if (!any) { h2('Course homework'); any = true; }
-    h3('Session ' + s.n + ': ' + s.title);
-    blocks.forEach(function(b){ p(hwTitle(b.h) + (state.course.done[hwKey(s, b.h)] ? ' (marked done)' : ''), 10.5, 'bold'); b.lines.forEach(function(l){ kv(l[0], l[1]); }); y += 4; });
-  });
+  }
   var f = state.flare;
   if (f.signs || f.helps || f.pause || f.contacts) { h2('Flare plan'); kv('Early warning signs', f.signs); kv('What usually helps', f.helps); kv('What I can put on hold', f.pause); kv('Who I can contact', f.contacts); }
 
@@ -1955,6 +2062,7 @@ function importBackup(file){
       for (k in d.course.done) if (!state.course.done[k]) state.course.done[k] = d.course.done[k];
       for (k in d.course.read) if (!state.course.read[k]) state.course.read[k] = d.course.read[k];
       for (k in d.read) if (!state.read[k]) state.read[k] = d.read[k];
+      if (d.learn) { for (k in d.learn.read || {}) if (!state.learn.read[k]) state.learn.read[k] = d.learn.read[k]; for (k in d.learn.answers || {}) if (!state.learn.answers[k]) { state.learn.answers[k] = d.learn.answers[k]; added++; } }
       for (k in d.flare) if (!state.flare[k] && d.flare[k]) state.flare[k] = d.flare[k];
       state.setup.done = true; save();
       ui.importMsg = 'Restored ' + added + ' entries from the backup.';
@@ -1970,7 +2078,7 @@ function render(){
   var v = $('#view'), h, tabs = $('#tabs'), header = $('#header');
   applyPrefs();
   try { if (window.speechSynthesis && ui.speaking) { window.speechSynthesis.cancel(); ui.speaking = false; } } catch(e){}
-  if (ui.tab === 'course') { ui.tab = 'path'; ui.sub.path = 'course'; }
+  if (ui.tab === 'course' || ui.tab === 'learn') { ui.tab = 'path'; ui.sub.path = 'learn'; }
   if (ui.tab === 'plan') { ui.tab = 'path'; ui.sub.path = ui.sub.plan === 'today' ? 'daily' : ui.sub.plan; }
   if (ui.tab === 'track') { ui.tab = 'tools'; ui.sub.tools = 'log'; }
   if (ui.tab === 'milestones') { ui.tab = 'progress'; ui.sub.progress = 'milestones'; }
@@ -1986,7 +2094,6 @@ function render(){
     else if (ui.tab === 'me') h = viewMe();
     else if (ui.tab === 'track') h = viewTrack();
     else if (ui.tab === 'tools') h = viewTools();
-    else if (ui.tab === 'course') h = viewCourse();
     else if (ui.tab === 'plan') h = viewPlan();
     else if (ui.tab === 'export') h = viewExport();
     else if (ui.tab === 'settings') h = viewSettings();
@@ -2009,9 +2116,9 @@ function render(){
     if (p.type === 'move' && p.exRunning) startExLoop();
   }
 }
-function go(tab, sub){ ui.tab = tab; if (sub) { for (var k in sub) ui.sub[k] = sub[k]; } ui.panel = null; ui.lesson = null; ui.session = null; ui.hw = null; ui.scrollTop = true; render(); }
+function go(tab, sub){ ui.tab = tab; if (sub) { for (var k in sub) ui.sub[k] = sub[k]; } ui.panel = null; ui.lesson = null; ui.learnTopic = null; ui.scrollTop = true; render(); }
 function openTool(type){
-  ui.tab = 'tools'; ui.sub.tools = 'calm'; ui.lesson = null; ui.session = null; ui.hw = null; ui.scrollTop = true;
+  ui.tab = 'tools'; ui.sub.tools = 'calm'; ui.lesson = null; ui.learnTopic = null; ui.scrollTop = true;
   var preset = (ui.pacePreset && PACES[ui.pacePreset]) ? ui.pacePreset : '4-6'; ui.pacePreset = null;
   if (type === 'breath') ui.panel = {type:'breath', pace:preset, mins:3, running:false, done:false};
   else if (type === 'ground') ui.panel = {type:'ground', step:0};
@@ -2034,12 +2141,12 @@ function draftFor(name){
   if (name === 'attempt') return ui.draftAttempt;
   if (name === 'profile') return state.profile;
   if (name === 'flare') return state.flare;
-  if (name === 'course') return state.course.answers;
+  if (name === 'learn') return state.learn.answers;
   if (name === 'week') { var k = weekKey(new Date()); state.weeks[k] = state.weeks[k] || {}; return state.weeks[k]; }
   if (name === 'panel') return ui.panel;
   return null;
 }
-function persistent(name){ return name === 'flare' || name === 'course' || name === 'week' || name === 'profile'; }
+function persistent(name){ return name === 'flare' || name === 'learn' || name === 'week' || name === 'profile'; }
 function byId(list, id){ return list.filter(function(x){ return x.id === id; })[0]; }
 var A = {
   tab: function(el){ go(el.getAttribute('data-tab')); },
@@ -2107,7 +2214,6 @@ var A = {
   'pin-toggle': function(el){ var k = el.getAttribute('data-key'), i = state.pins.indexOf(k); if (i > -1) state.pins.splice(i, 1); else state.pins.push(k); save(); ui.refocus = '[data-action="pin-toggle"][data-key="' + k + '"]'; render(); },
   'quick-two': function(){ ui.pacePreset = null; openTool('breath'); ui.panel.mins = 2; render(); },
   'read-aloud': function(el){ readAloud(el.getAttribute('data-text-id')); },
-  'teach-full': function(){ ui.fullTeach = true; render(); },
   'remind-time': function(el){ ui.remindTime = el.getAttribute('data-val'); ui.remindLinks = null; render(); },
   'remind-make': function(){
     var f = new File([buildICS(ui.remindTime)], 'steady-ground-reminder.ics', {type:'text/calendar'});
@@ -2219,8 +2325,10 @@ var A = {
 
   panel: function(el){
     var t = el.getAttribute('data-type');
-    if (t === 'move') { ui.panel = {type:'move', id: el.getAttribute('data-id'), exRunning:false, exEnd:0, before:-1}; ui.scrollTop = true; render(); }
-    else if (t === 'urges') { ui.panel = {type:'urges', open:'', before:-1}; ui.scrollTop = true; render(); }
+    /* The movement and urges panels live on the Tools tab. They used to be set up without moving
+       there, so opening one from Home or the "help right now" list showed nothing at all. */
+    if (t === 'move') { ui.tab = 'tools'; ui.sub.tools = 'move'; ui.lesson = null; ui.learnTopic = null; ui.panel = {type:'move', id: el.getAttribute('data-id'), exRunning:false, exEnd:0, before:-1, metro:false, bpm:90}; ui.scrollTop = true; render(); }
+    else if (t === 'urges') { ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.lesson = null; ui.learnTopic = null; ui.panel = {type:'urges', open:'', before:-1}; ui.scrollTop = true; render(); }
     else openTool(t);
   },
   'urges-open': function(el){ var id = el.getAttribute('data-id'); ui.panel.open = ui.panel.open === id ? '' : id; ui.refocus = '[data-action="urges-open"][data-id="' + id + '"]'; render(); },
@@ -2230,7 +2338,7 @@ var A = {
     render();
   },
   'scan-prev': function(){ ui.panel.step = Math.max(0, ui.panel.step - 1); render(); },
-  'feel-new': function(){ ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.lesson = null; ui.session = null; ui.hw = null; ui.draftFeel = newFeel(); ui.feelStep = 1; ui.panel = {type:'feel', before:-1, done:false}; ui.scrollTop = true; render(); },
+  'feel-new': function(){ ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.lesson = null; ui.learnTopic = null; ui.draftFeel = newFeel(); ui.feelStep = 1; ui.panel = {type:'feel', before:-1, done:false}; ui.scrollTop = true; render(); },
   'feel-cancel': function(){ ui.draftFeel = null; ui.panel = null; ui.scrollTop = true; render(); },
   'feel-family': function(el){ ui.draftFeel.family = el.getAttribute('data-id'); ui.draftFeel.word = ''; ui.draftFeel.urges = []; ui.draftFeel.action = ''; ui.refocus = '[data-action="feel-family"][data-id="' + ui.draftFeel.family + '"]'; render(); },
   'feel-next': function(){ if (ui.feelStep === 1 && !ui.draftFeel.family) return; ui.feelStep = Math.min(5, ui.feelStep + 1); ui.scrollTop = true; render(); },
@@ -2287,10 +2395,18 @@ var A = {
   'bls-again': function(){ ui.panel = {type:'bls', mode:ui.panel.mode, secs:ui.panel.secs, speed:ui.panel.speed, running:false, done:false, before:ui.panel.before}; render(); },
   'shift-next': function(){ var n; do { n = Math.floor(Math.random() * SHIFTS.length); } while (n === ui.panel.i && SHIFTS.length > 1); ui.panel.i = n; render(); },
   'shift-done': function(){ var p = ui.panel; p.done = true; p.after = -1; p.minutesDone = 1; if (p.before < 0) saveGrounding(p, 1); render(); },
+  'metro-toggle': function(){
+    var p = ui.panel;
+    if (p.metro) { p.metro = false; stopMetro(); render(); return; }
+    p.metro = true;
+    if (!startMetro()) { p.metro = false; toast('Sound is not available on this phone.'); }
+    render();
+  },
+  'bpm-step': function(el){ setBpm((ui.panel.bpm || 90) + +el.getAttribute('data-val')); },
   'ex-start': function(){ var x = findEx(ui.panel.id); ui.panel.exRunning = true; ui.panel.exEnd = Date.now() + x.mins * 60000; render(); },
   'ex-stop': function(){ ui.panel.exRunning = false; render(); },
   'ex-done': function(){
-    var x = findEx(ui.panel.id);
+    var x = findEx(ui.panel.id); stopMetro();
     logActivity({ kind:'move', minutes:x.mins, label:x.name });
     ui.panel = null; ui.scrollTop = true; fxTick('Logged ' + x.mins + ' min of movement'); render();
   },
@@ -2352,19 +2468,11 @@ var A = {
     save(); render();
   },
 
-  'course-open': function(el){ ui.fullTeach = false; ui.tab = 'course'; ui.panel = null; ui.lesson = null; ui.session = +el.getAttribute('data-n'); ui.hw = null;
-    var day = el.getAttribute('data-day'); if (day != null) { var s = findSession(ui.session); if (s) s.homework.forEach(function(h, i){ if (String(h.day) === day && ui.hw === null) ui.hw = i; }); }
-    ui.scrollTop = true; render(); },
-  'course-close': function(){ ui.session = null; ui.hw = null; ui.scrollTop = true; render(); },
-  'session-read': function(el){ var n = el.getAttribute('data-n'); state.course.read[n] = !state.course.read[n]; save(); if (state.course.read[n]) fxTick('Session read'); render(); },
-  'hw-open': function(el){ ui.tab = 'course'; ui.session = +el.getAttribute('data-n'); ui.hw = +el.getAttribute('data-i'); ui.scrollTop = true; render(); },
-  'hw-close': function(){ ui.hw = null; ui.scrollTop = true; render(); },
-  'hw-done': function(el){
-    var s = findSession(el.getAttribute('data-n')), h = s && s.homework[+el.getAttribute('data-i')]; if (!h) return;
-    var k = hwKey(s, h); if (state.course.done[k]) delete state.course.done[k]; else state.course.done[k] = Date.now();
-    save(); if (state.course.done[k]) fxTick('Homework done'); else toast('Marked as not done'); render();
-  },
-  'lesson-open': function(el){ ui.tab = 'course'; ui.lesson = el.getAttribute('data-id'); ui.panel = null; ui.scrollTop = true; render(); },
+  'goto-learn': function(){ go('path', {path:'learn'}); },
+  'learn-open': function(el){ ui.tab = 'path'; ui.sub.path = 'learn'; ui.panel = null; ui.lesson = null; ui.learnTopic = el.getAttribute('data-id'); ui.scrollTop = true; render(); },
+  'learn-close': function(){ ui.learnTopic = null; ui.scrollTop = true; render(); },
+  'learn-read': function(el){ var id = el.getAttribute('data-id'); if (state.learn.read[id]) delete state.learn.read[id]; else state.learn.read[id] = Date.now(); save(); if (state.learn.read[id]) fxTick('Topic read'); render(); },
+  'lesson-open': function(el){ ui.tab = 'path'; ui.sub.path = 'learn'; ui.learnTopic = null; ui.lesson = el.getAttribute('data-id'); ui.panel = null; ui.scrollTop = true; render(); },
   'lesson-close': function(){ ui.lesson = null; ui.scrollTop = true; render(); },
   'lesson-read': function(el){ var id = el.getAttribute('data-id'); state.read[id] = !state.read[id]; save(); if (state.read[id]) fxTick(); render(); },
 
@@ -2403,8 +2511,12 @@ document.addEventListener('input', function(e){
   if (t.type === 'range') { var out = $('[data-out="' + f + '"]'); if (out) out.textContent = t.value + (t.getAttribute('data-suffix') || ''); }
   if (persistent(name)) saveSoon(); else saveUiSoon();
 });
+document.addEventListener('input', function(e){
+  if (e.target && e.target.getAttribute && e.target.getAttribute('data-bpm')) setBpm(+e.target.value);
+});
 document.addEventListener('change', function(e){
   if (e.target && e.target.id === 'importFile' && e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
+  if (e.target && e.target.getAttribute && e.target.getAttribute('data-exp-reflect')) { ui.exp.reflect = !!e.target.checked; }
   if (e.target && e.target.getAttribute && e.target.getAttribute('data-voice-pick')) {
     state.prefs.voice = e.target.value; voiceCache = null; save(); testVoice();
   }
@@ -2412,7 +2524,7 @@ document.addEventListener('change', function(e){
 document.addEventListener('keydown', function(e){
   if (e.key === 'Enter' && e.target && e.target.id === 'planText') { e.preventDefault(); A['plan-add'](); }
 });
-window.addEventListener('pagehide', function(){ clearTimeout(saveTimer); save(); clearTimeout(uiTimer); saveUi(); stopReading(); stopTone(); });
+window.addEventListener('pagehide', function(){ clearTimeout(saveTimer); save(); clearTimeout(uiTimer); saveUi(); stopReading(); stopMetro(); stopTone(); });
 
 (function visit(){
   var now = Date.now();
@@ -2421,7 +2533,20 @@ window.addEventListener('pagehide', function(){ clearTimeout(saveTimer); save();
 })();
 restoreUi();
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  try { navigator.serviceWorker.register('sw.js').catch(function(){}); } catch(e){}
+  /* updateViaCache:'none' stops the browser serving itself a stale copy of sw.js, which
+     would hide a new version indefinitely; update() then asks on every open. When a new
+     worker does take over, the files already on screen are the old ones, so the page is
+     reloaded once, but never out from under a running exercise. */
+  try {
+    navigator.serviceWorker.register('sw.js', { updateViaCache:'none' }).then(function(reg){
+      try { reg.update(); } catch(e){}
+    }).catch(function(){});
+    var swSwapped = false;
+    navigator.serviceWorker.addEventListener('controllerchange', function(){
+      if (swSwapped || (ui.panel && ui.panel.running)) return;
+      swSwapped = true; try { location.reload(); } catch(e){}
+    });
+  } catch(e){}
 }
 render();
 })();

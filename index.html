@@ -23,16 +23,10 @@
 <!--APP-->
 <div class="wrap">
   <header class="top" id="header">
-    <div class="top-left">
-      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><circle cx="43" cy="21" r="8.5" fill="#C9856B"/>
-  <path d="M26 50C32 38 44 30 64 32V50Z" fill="#A9C5B3"/>
-  <path d="M0 50C3 34 16 22 34 24C42 25 44 30 42 33C39 37 32 38 30 44C29 47 30 49 31 50Z" fill="#24584F"/>
-  <path d="M27 50C28 45 32 42 37 40C41 38 44 35 46 30" fill="none" stroke="#F7F5F0" stroke-width="3.2" stroke-linecap="round"/></svg>
-      <div>
-        <div class="brand">Steady Ground</div>
-        <div class="brand-sub">Your recovery companion</div>
-      </div>
-    </div>
+    <button type="button" class="top-left home-link" data-action="goto-today" aria-label="Steady Ground: go to Home">
+      <svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><clipPath id="sgh"><circle cx="32" cy="32" r="30"/></clipPath><g clip-path="url(#sgh)"><rect width="64" height="64" fill="#DCE8DF"/><circle cx="41" cy="29" r="9" fill="#C9856B"/><path d="M-2 47C14 35 34 33 66 42V66H-2Z" fill="#24584F"/></g></svg>
+      <span class="brand">Steady Ground</span>
+    </button>
     <button type="button" class="gear" data-action="goto-me" aria-label="Me: profile and settings">
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 20c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg><span>Me</span>
     </button>
@@ -59,7 +53,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="jspdf.umd.min.js"></script>
-<script src="course.js"></script>
+<script src="learn.js"></script>
 <script src="app.js"></script>
 <!--/APP-->
 </body>

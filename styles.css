@@ -67,9 +67,11 @@ h3{font-size:18px; line-height:1.3; font-weight:600}
 .top{display:flex; align-items:center; gap:12px; padding-block:18px 10px}
 .mark{width:40px; height:40px; flex:none}
 .brand{font-family:var(--font-display); font-weight:600; font-size:22px; line-height:1.1; letter-spacing:-.01em}
-.brand-sub{font-size:14px; color:var(--muted)}
 .top{justify-content:space-between}
 .top-left{display:flex; align-items:center; gap:12px; min-width:0}
+/* The logo and name are one button back to Home. */
+.home-link{background:none; border:0; padding:4px 6px 4px 0; margin:0; font:inherit; color:inherit; text-align:left; cursor:pointer; border-radius:12px; min-height:44px}
+.home-link:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
 .gear{min-width:44px; height:44px; flex:none; border-radius:12px; border:1px solid var(--line); background:var(--surface); color:var(--fg); cursor:pointer; display:inline-flex; align-items:center; gap:6px; padding:0 12px; font:inherit; font-size:15px; font-weight:600}
 .gear svg{width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round}
 .stack{display:flex; flex-direction:column; gap:16px}
@@ -211,6 +213,7 @@ dl.defs dt{font-weight:700; color:var(--fg)}
 dl.defs dd{margin:0}
 .welcome{min-height:70vh; display:flex; flex-direction:column; justify-content:center; gap:20px}
 .welcome .mark{width:56px; height:56px}
+.welcome .mark-lg{width:76px; height:76px}
 .optbtn{font:inherit; text-align:left; width:100%; background:var(--surface); border:1.5px solid var(--line); border-radius:16px; padding:16px 18px; color:var(--fg); cursor:pointer; display:flex; flex-direction:column; gap:4px}
 .optbtn[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft)}
 .optbtn .t{font-weight:700; font-size:18px}
@@ -260,3 +263,62 @@ html.calm-ui .orb-glow{display:none}
   .fx-check svg{animation:none; stroke-dashoffset:0}
   *,*::before,*::after{transition:none !important; animation:none !important}
 }
+
+/* ---------- artwork ---------- */
+.art{display:block; width:100%; height:auto}
+.art .bg{fill:var(--accent-soft)}
+.art .iv{fill:var(--surface)}
+.art .a{fill:var(--accent)}
+.art .s{fill:var(--sage)}
+.art .t{fill:var(--terra)}
+.art .glow{fill:var(--terra); opacity:.14}
+.art .ln{fill:none; stroke:var(--accent); stroke-width:3.5; stroke-linecap:round; stroke-linejoin:round}
+.art .ln.lnt{stroke:var(--terra)}
+.art .num{font-family:var(--font-display); font-weight:700; font-size:40px; fill:var(--accent)}
+.art .num.sm{font-size:22px}
+.art-step{max-width:340px; margin:14px auto 4px}
+.art-body{max-width:250px}
+.art-body .part{fill:var(--sage)}
+.art-body .part .limb{fill:none; stroke:var(--sage); stroke-width:11; stroke-linecap:round; stroke-linejoin:round}
+.art-body .part .limb.thick{stroke-width:15}
+.art-body .part.on{fill:var(--terra); opacity:1}
+.art-body .part.on .limb{stroke:var(--terra)}
+
+/* ---------- Learn ---------- */
+.learn-row{display:flex; gap:14px; align-items:center; width:100%; text-align:left; padding:14px; border:1px solid var(--line); border-radius:var(--radius, 16px); background:var(--surface); color:var(--fg); font:inherit; cursor:pointer}
+.learn-row:hover{border-color:var(--sage)}
+.learn-row:focus-visible{outline:3px solid var(--accent); outline-offset:2px}
+.learn-row .art-thumb{width:64px; height:64px; flex:none}
+.learn-row-text{display:flex; flex-direction:column; gap:4px; min-width:0}
+.learn-row-text .t{font-weight:600; font-size:17px}
+.learn-status{font-size:14px}
+.learn-hero{max-width:180px}
+.learn-prose h2{margin-top:22px}
+.learn-prose h2:first-child{margin-top:0}
+.learn-prose ul{padding-left:22px}
+.learn-prose li{margin:6px 0}
+.learn-note{background:var(--accent-soft); border-radius:12px; padding:12px 14px; color:var(--fg)}
+.trap-list{display:flex; flex-direction:column; gap:10px; margin:12px 0}
+.trap{border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:var(--bg)}
+.trap p{margin:4px 0}
+.trap-name{font-weight:700}
+.trap-what{color:var(--muted)}
+.trap-bal{color:var(--accent)}
+.lbl-inline{font-weight:600; color:var(--fg)}
+.card-care{background:var(--sage-soft); border-color:var(--sage)}
+.sources summary{cursor:pointer; font-weight:600; min-height:44px; display:flex; align-items:center}
+.sources ul{padding-left:20px; color:var(--muted); font-size:15px}
+.check-row{display:flex; gap:10px; align-items:center; font-size:17px; min-height:44px; cursor:pointer}
+.check-row input{width:22px; height:22px; accent-color:var(--accent)}
+
+/* ---------- rhythm walk ---------- */
+.walk-feet{display:flex; justify-content:center; gap:56px; margin:16px 0 8px}
+.foot{display:flex; flex-direction:column; align-items:center; gap:4px; font-size:14px; color:var(--muted)}
+.foot svg{fill:var(--sage)}
+.foot.on svg{fill:var(--terra); opacity:1}
+.foot.on{color:var(--fg); font-weight:600}
+.bpm-row{display:flex; align-items:center; gap:10px}
+.bpm-row input[type=range]{flex:1; accent-color:var(--accent); height:44px}
+.bpm-step{min-width:48px; font-size:22px; padding:0}
+.bls-ears{justify-content:space-between; margin:6px 2px 0}
+.tag{display:inline-block; font-size:14px; font-weight:600; padding:3px 10px; border-radius:999px; background:var(--sage-soft); color:var(--fg)}

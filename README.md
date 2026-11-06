@@ -8,14 +8,14 @@ Steady Ground is a progressive web app (PWA). Patients open one web address on t
 |---|---|
 | `index.html` | The app page |
 | `styles.css` | Styling |
-| `app.js` | The app itself: tracking, tools, course, export |
-| `course.js` | The 10 course sessions, condensed from the patient workbook |
+| `app.js` | The app itself: tracking, tools, Learn, export |
+| `learn.js` | The four Learn topics: reading, reflection questions and sources |
 | `jspdf.umd.min.js` | PDF library (kept locally so export works offline) |
 | `manifest.webmanifest` | Tells phones the name, icon and colours of the app |
 | `sw.js` | Service worker: caches the app so it opens offline |
 | `icons/` | App icons |
 
-Edit `course.js` to change course wording. Edit the content lists near the top of `app.js` (symptoms, triggers, exercises, quick reads) to change those.
+Edit `learn.js` to change the Learn topics. Edit the content lists near the top of `app.js` (symptoms, triggers, exercises, quick reads) to change those.
 
 ## Put it on GitHub Pages (free, about 10 minutes)
 
@@ -30,7 +30,7 @@ That address is what you give patients. Nobody can see patient data through it; 
 
 ### Updating the app later
 
-Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v10` to `steady-ground-v11` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v12` to `steady-ground-v13` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
 
 ## Engagement features (version 3)
 
@@ -107,6 +107,51 @@ Version 7 already covered the identity, four-tab navigation, context-sensitive e
 - **Read aloud recovers when a voice will not speak.** A phone will list voices it cannot actually play, and an iPhone lists its Enhanced and Premium voices whether or not they have been downloaded. Asking for one of those produces silence with no error, which is what broke version 9 on a real phone. The first piece of text is now watched, and if nothing has begun within a second and a half the whole passage is tried again on the phone's own default voice, which always speaks. If that fails too the app says so rather than sitting silent.
 - A voice that went quiet also used to leave read aloud stuck in the speaking state, so every later tap only switched it off again. The engine is now trusted over that flag.
 - Voice scoring now weights a voice the phone keeps on itself well above the words premium or enhanced in its name.
+
+## Version 11: updates that actually arrive
+
+Bumping the cache version was not enough to get a new version onto a phone, which is why
+versions 9 and 10 kept appearing as the old app.
+
+- **The install step now fetches past the browser cache.** `cache.addAll(FILES)` fetches
+  through the browser's own HTTP cache. GitHub Pages serves files with cache headers, so a
+  freshly installed worker was handed back the previous copies and stored those under the
+  new version name. The bump changed nothing. Each file is now requested with
+  `cache: "reload"`, which goes to the network. Reproduced the failure against a server
+  sending the same cache headers, and confirmed the fix on it.
+- **Files are cached one by one** rather than through `addAll`, so a single missing file
+  (a renamed icon, say) no longer makes the whole install fail silently and leave the old
+  version in place.
+- **The worker script itself is registered with `updateViaCache: "none"`**, so the browser
+  cannot serve itself a stale `sw.js` and hide a new version indefinitely, and `update()`
+  is called on every open.
+- **Serving is now stale-while-revalidate**: the cached copy still appears instantly and
+  offline, while a fresh copy is fetched in the background for next time. A cache that has
+  gone stale for any reason repairs itself on the next open, with no version bump needed.
+- **A worker taking over mid-session reloads the page once**, so the patient is not left
+  looking at files the previous version put there. It will not reload during a running
+  exercise.
+
+## Version 12: Learn instead of the course, rhythm walk, artwork, new logo
+
+**Upload:** `app.js`, `learn.js` (new), `styles.css`, `index.html`, `sw.js`, `README.md`, and the five files in `icons/`. **Delete from the repo:** `course.js` (no longer used) and `chime-demo.wav` (a sample I sent, not part of the app).
+
+- **The ten-session course is gone; My Path has a Learn tab in its place.** Four topics, each with plain-language reading, read aloud, links to the tools that put it into practice, optional reflection questions, and a "Where this comes from" list of sources:
+  1. Attention and prediction: the predictive account of FND, why attention amplifies symptoms, checking, and updating predictions.
+  2. Agency and a life beyond FND: sense of agency, illness identity, the layers of self, values.
+  3. Thinking traps in FND: the nine distortions from the old session 5, each as a card with an example and a balanced alternative, plus tolerating uncertainty.
+  4. Feelings, fear of feelings and FND: emotions as body states, emotion (affect) phobia, secure and insecure attachment, and childhood neglect and abuse as risk factors, stated as risk factors, with the point that many people with FND have no such history. It opens with a care note and a button straight to grounding.
+  The short quick reads stay underneath the four topics.
+- **Reflections are private by default.** They save as the patient types and stay on the phone. The share screen shows an unticked checkbox to include them; only then do they appear in the PDF (and as `learn-reflections.csv`).
+- **Nothing a patient already wrote is deleted.** Old course homework answers stay in the phone's storage and backups; they are just no longer shown or exported.
+- **Guided vs independent** set-up stays. Goals lead in both. Guided mode adds a line in Learn about bringing reflections to appointments.
+- **Course milestones replaced** by: read a topic, read all four, answer a reflection.
+- **Rhythm walk works.** Movement exercises opened from Home or "I need help right now" were set up without switching to the Tools tab, so nothing appeared. Fixed for every movement exercise and for urges.
+- **Walking beat** on the rhythm walk: optional, 50 to 130 steps a minute (default 90) with a slider and -/+ buttons. Two beats alternate, a higher tick and a lower tock, synthesised as a woodblock (short pitch-dropping knock, inharmonic overtone, filtered-noise strike). Beats are scheduled on the audio clock so the tempo stays even, and two footprints light up in time.
+- **Side to side:** sound mode now shows the same sweeping dot as eye mode; each chime lands on the side the dot has reached.
+- **Artwork** on 5-4-3-2-1 grounding (the sense for each step, with a dot per item), progressive muscle relaxation and body scan (a figure with the area being worked on coloured), each attention-shift prompt, and each Learn topic. All decorative, theme-aware, and hidden from screen readers.
+- **Header:** tapping the logo or name goes Home; "Your recovery companion" removed.
+- **New logo:** a sun rising behind one smooth hill, in a circle. The earlier drafts looked like a head and shoulders next to the Me button, so it was reshaped as a landscape. New home-screen icons to match.
 
 ## Installing on an iPhone
 
