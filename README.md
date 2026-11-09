@@ -30,7 +30,7 @@ That address is what you give patients. Nobody can see patient data through it; 
 
 ### Updating the app later
 
-Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v12` to `steady-ground-v13` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v13` to `steady-ground-v14` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
 
 ## Engagement features (version 3)
 
@@ -131,6 +131,13 @@ versions 9 and 10 kept appearing as the old app.
 - **A worker taking over mid-session reloads the page once**, so the patient is not left
   looking at files the previous version put there. It will not reload during a running
   exercise.
+
+## Version 13: shifting attention with a songbird, unpack a moment, slower walking beat
+
+- **Walking beat** now goes from 20 to 130 steps a minute (was 50 to 130).
+- **Shifting attention** replaces the old list of distraction ideas. It opens by describing mindfulness as attention with purpose, then runs a 2-minute practice: an animated songbird on a branch with a synthesised nature soundscape (a stream, wind in the leaves, distant birds, a far-off dove). Four 30-second turns: look at the bird, listen and name the sounds, look again for what was missed, listen again. A soft chime marks each switch, the scene dims during listening turns, and a standing note says that attention drifting is natural. The bird breathes, blinks, tilts its head, hops, turns, preens, flutters and sings, and its song plays when its beak opens. Stress before and after is recorded as "Shifting attention".
+- **5-4-3-2-1 grounding:** the hand on "Name 4 things you can feel" is redrawn as a solid open hand.
+- **Unpack a moment** (Tools → Feel): seven short steps. What happened and who it was with, what the body noticed, what showed on the surface, what might be underneath, what I needed to know, what I did, then a summary card. Up to 2 choices where asked; "Nothing I noticed" and "Not sure" stand alone and are always visible; every step can be skipped. The summary describes what happened together and never says one thing caused another. Entries appear under Log → Moments, with the most frequent need shown once there are a few. **Private by default:** they are only added to the PDF and CSV (`moments-log.csv`) when the patient ticks the box on the share screen, because they can mention partners and family.
 
 ## Version 12: Learn instead of the course, rhythm walk, artwork, new logo
 

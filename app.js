@@ -10,7 +10,7 @@ function blank(){
   return { setup:{done:false, mode:''}, episodes:[], grounding:[], thoughts:[], checkins:{}, weeks:{}, goals:[], activity:[], plan:{},
            flare:{signs:'',helps:'',contacts:'',pause:''}, read:{}, course:{answers:{}, done:{}, read:{}}, learn:{read:{}, answers:{}},
            badges:{}, badgesInit:false, prefs:{textSize:'normal', theme:'system', calm:false, voice:''}, stats:{shares:0}, lastOpen:0, pins:['breath','ground'],
-           feelings:[], profile:{name:'', colour:'teal', vision:'', about:'', team:'', joined:0, presentation:[], difficulties:[], matters:''},
+           feelings:[], moments:[], profile:{name:'', colour:'teal', vision:'', about:'', team:'', joined:0, presentation:[], difficulties:[], matters:''},
            fgoals:[], wins:{}, patterns:[] };
 }
 var state = blank();
@@ -38,7 +38,7 @@ function saveSoon(){ clearTimeout(saveTimer); saveTimer = setTimeout(save, 300);
 /* Where the patient was: the open tab, session, homework and any half-filled form are kept on the phone,
    so closing the app mid-task loses nothing and it reopens on the same screen. Timed exercises are not resumed. */
 var UI_KEY = 'steady-ground-where';
-var UI_KEEP = ['tab','sub','learnTopic','lesson','goalDetail','draftEp','draftTh','thStep','draftFeel','feelStep','draftGr','draftFgoal','fgoalForm','draftAttempt','draftGoal','goalForm','patternSel','reflectOpen','planKind','setupStep','welcomeMode','draftSetup'];
+var UI_KEEP = ['tab','sub','learnTopic','lesson','goalDetail','draftEp','draftTh','thStep','draftFeel','feelStep','draftMoment','momentStep','draftGr','draftFgoal','fgoalForm','draftAttempt','draftGoal','goalForm','patternSel','reflectOpen','planKind','setupStep','welcomeMode','draftSetup'];
 function saveUi(){
   if (!canStore) return;
   try { var o = {}; UI_KEEP.forEach(function(k){ o[k] = ui[k]; }); localStorage.setItem(UI_KEY, JSON.stringify(o)); } catch(e){}
@@ -52,6 +52,7 @@ function restoreUi(){
     var o = JSON.parse(raw), keys = state.setup.done ? UI_KEEP : ['setupStep','welcomeMode','draftSetup'];
     keys.forEach(function(k){ if (o[k] !== undefined && o[k] !== null) { if (k === 'sub') { for (var kk in o.sub) ui.sub[kk] = o.sub[kk]; } else ui[k] = o[k]; } });
     if (ui.draftFeel) { ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.panel = {type:'feel', before:-1, done:false}; }
+    else if (ui.draftMoment) { ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.panel = {type:'moment', before:-1, done:false}; }
     if (ui.sub.path === 'course') ui.sub.path = 'learn';
     if (ui.learnTopic && !findTopic(ui.learnTopic)) ui.learnTopic = null;
     /* Short-lived screens (the toolkit, a pattern check, sharing, settings) reopen on Home instead. */
@@ -119,7 +120,7 @@ var SYMPTOMS = ['Weakness','Shaking or tremor','Difficulty walking','Seizure-lik
 var TRIGGERS = ['Stress or worry','Conflict','Poor sleep','Overdid it','Noise, crowds or screens','Pain','Fatigue','Strong emotion','Body sensation','Nothing obvious'];
 var WARNINGS = ['Subtle physical shift','Change in breathing','Muscle tension','Change in mood','Racing thoughts','Feeling off','Nothing noticeable'];
 var HELPS = ['Paced breathing','5-4-3-2-1 grounding','Muscle relaxation','Rest','Gentle movement','Shifted my attention','Talked to someone','Prescribed medication','Nothing yet'];
-var SKILLS = ['Paced breathing','5-4-3-2-1 grounding','Progressive muscle relaxation','Body scan','Attention shift','Other'];
+var SKILLS = ['Paced breathing','5-4-3-2-1 grounding','Progressive muscle relaxation','Body scan','Shifting attention','Other'];
 var EMOTIONS = ['Anxious','Scared','Sad','Frustrated','Ashamed','Angry','Numb','Overwhelmed','Hopeless'];
 var TRAPS = [
   ['Catastrophising','Expecting the worst possible outcome.'],
@@ -147,16 +148,6 @@ var PMR = [
   ['Chest and stomach','Take a breath in and tighten your stomach. Hold, then breathe out and soften.'],
   ['Thighs','Press your knees together and tense your thighs. Hold, then release.'],
   ['Calves and feet','Point your toes down and tense your calves. Hold, then release and wiggle your toes.']
-];
-var SHIFTS = [
-  'Count backwards from 100 in sevens. If you lose your place, start again with no hurry.',
-  'Pick a category, like animals or foods, and name one for each letter of the alphabet.',
-  'Look at one object near you and describe it in detail: colour, shape, texture, what it is made of.',
-  'Name three sounds you can hear right now, starting with the farthest one.',
-  'Press your feet into the floor. Notice the pressure, then the temperature.',
-  'Think of a place you like. Walk through it slowly in your mind and name what you pass.',
-  'Go through the words of a song you know well, quietly in your head.',
-  'Message or call someone and ask about their day.'
 ];
 var EXERCISES = [
   {id:'ankle', name:'Seated ankle circles', mins:3, dose:'10 slow circles each way, each foot', standing:false,
@@ -394,6 +385,7 @@ function viewCompleted(){
   state.grounding.forEach(function(g){ ev.push({ ts:g.ts, cat:'calm', text:g.skill + (g.before >= 0 && g.after >= 0 ? ', stress ' + g.before + ' to ' + g.after : '') }); });
   state.episodes.forEach(function(e){ ev.push({ ts:e.ts, cat:'track', text:'Logged an episode' + (e.types.length ? ': ' + joinList(e.types) : '') }); });
   state.thoughts.forEach(function(t){ ev.push({ ts:t.ts, cat:'track', text:'Thought record' + (t.thought ? ': ' + t.thought : '') }); });
+  state.moments.forEach(function(m){ ev.push({ ts:m.ts, cat:'track', text:'Unpacked a moment' }); });
   state.feelings.forEach(function(f){ var fam = familyById(f.family); ev.push({ ts:f.ts, cat:'track', text:'Named a feeling: ' + (fam ? fam.name.toLowerCase() : '') + (f.word ? ', ' + f.word.toLowerCase() : '') }); });
   state.activity.forEach(function(a){ if (a.kind === 'move') ev.push({ ts:a.ts, cat:'move', text:a.label + ', ' + a.minutes + ' min' }); if (a.kind === 'goal') ev.push({ ts:a.ts, cat:'plan', text:'+' + a.minutes + ' min of ' + a.label }); });
   Object.keys(state.learn.read).forEach(function(id){ var t = findTopic(id); if (t && state.learn.read[id]) ev.push({ ts:state.learn.read[id], cat:'course', text:'Read: ' + t.title }); });
@@ -462,11 +454,11 @@ function viewMe(){
 
 /* ---------- ui state ---------- */
 var ui = {
-  tab:'today', sub:{track:'episodes', tools:'calm', plan:'pacing', export:'pdf', progress:'trends'}, draftFeel:null, feelStep:1,
+  tab:'today', sub:{track:'episodes', tools:'calm', plan:'pacing', export:'pdf', progress:'trends'}, draftFeel:null, feelStep:1, draftMoment:null, momentStep:1,
   panel:null, draftEp:null, draftTh:null, thStep:1, draftGoal:null, goalForm:false, draftGr:null,
   example:false, confirmDel:null, confirmClear:false, summaryText:null,
   planKind:'activity', lesson:null, learnTopic:null, scrollTop:false, refocus:null,
-  exp:{range:28, pdf:true, csv:true, backup:false, reflect:false, busy:false, links:null}, importMsg:'',
+  exp:{range:28, pdf:true, csv:true, backup:false, reflect:false, moments:false, busy:false, links:null}, importMsg:'',
   celebrate:[], welcomeBack:false, remindTime:'09:00', remindLinks:null,
   setupStep:0, draftSetup:{presentation:[], difficulties:[], matters:'', goal:''}, goalDetail:null, fgoalForm:false, draftFgoal:null, draftAttempt:null, patternSel:[], reflectOpen:false
 };
@@ -479,6 +471,8 @@ function stopTimers(){
   /* The tone keeps playing across a redraw while its own session is still running, and stops the moment it is not. */
   var bp = ui.panel;
   if (!(bp && bp.type === 'move' && bp.id === 'walk' && bp.metro)) stopMetro();
+  stopBird();
+  if (!(bp && bp.type === 'shift' && bp.running)) stopNature();
   if (!(bp && bp.type === 'bls' && bp.running && bp.mode === 'sound') && !metroRunning()) stopTone();
   if (timers.wl){ try { timers.wl.release(); } catch(e){} timers.wl = null; }
 }
@@ -585,6 +579,7 @@ function toolkitFor(){
 }
 function pinInfo(k){
   if (k === 'feel') return { label:'Name the feeling', action:'feel-new', attrs:'' };
+  if (k === 'moment') return { label:'Unpack a moment', action:'moment-new', attrs:'' };
   if (k === 'pattern') return { label:'Understand a pattern', action:'goto-pattern', attrs:'' };
   if (k === 'urges') return { label:'Urges and opposite action', action:'panel', attrs:' data-type="urges"' };
   if (k.indexOf('move:') === 0) { var x = findEx(k.slice(5)); return x ? { label:x.name, action:'panel', attrs:' data-type="move" data-id="' + x.id + '"' } : null; }
@@ -726,7 +721,7 @@ function voiceCard(){
   h += '<p class="hint">Voices come from your phone, not from the app, so the choice here is whatever your phone has. If they all sound flat, your phone can download a better one for free: on iPhone, Settings, then Accessibility, then Spoken Content, then Voices. On Android, Settings, then Accessibility, then Text-to-speech.</p></section>';
   return h;
 }
-var TOOL_LABELS = { breath:'Paced breathing', ground:'5-4-3-2-1 grounding', shift:'Shift your attention', feel:'Name the feeling', scan:'Body scan', move:'Movement', bls:'Side to side', pace:'Pacing: rest, then a small step' };
+var TOOL_LABELS = { breath:'Paced breathing', ground:'5-4-3-2-1 grounding', shift:'Shifting attention', feel:'Name the feeling', moment:'Unpack a moment', scan:'Body scan', move:'Movement', bls:'Side to side', pace:'Pacing: rest, then a small step' };
 function viewToolkit(){ return '<div class="stack">' + backBtn('goto-today', 'Back') + toolkitBody() + '</div>'; }
 function toolkitBody(){
   var kit = toolkitFor(), f = state.flare, helps = topCounts(state.episodes, 'helped', 3);
@@ -926,10 +921,11 @@ function newGr(){ return { when: localInput(new Date()), skill:'Paced breathing'
 var SEV = ['', 'Mild', 'Moderate', 'Severe'];
 
 function viewTrack(){
-  var h = '<div class="stack">' + '<h1>Track</h1>' + seg('track', [['episodes','Episodes'],['grounding','Grounding'],['thoughts','Thoughts'],['feelings','Feelings']], ui.sub.track);
+  var h = '<div class="stack">' + '<h1>Track</h1>' + seg('track', [['episodes','Episodes'],['grounding','Grounding'],['thoughts','Thoughts'],['feelings','Feelings'],['moments','Moments']], ui.sub.track);
   if (ui.sub.track === 'episodes') h += viewEpisodes();
   else if (ui.sub.track === 'grounding') h += viewGrounding();
   else if (ui.sub.track === 'thoughts') h += viewThoughts();
+  else if (ui.sub.track === 'moments') h += viewMoments();
   else h += viewFeelings();
   return h + '</div>';
 }
@@ -1180,6 +1176,7 @@ function viewTools(){
     if (p.type === 'move') return panelMove(p);
     if (p.type === 'urges') return panelUrges(p);
     if (p.type === 'feel') return panelFeel(p);
+    if (p.type === 'moment') return panelMoment(p);
   }
   var h = '<div class="stack"><h1>Tools</h1>' + seg('tools', [['now','Now'],['calm','Calm'],['feel','Feel'],['move','Move'],['log','Log']], ui.sub.tools);
   function toolRow(action, attrs, key, title, meta){ return '<div class="tool-row"><button type="button" class="tool-btn" data-action="' + action + '"' + attrs + '><span class="t">' + esc(title) + '</span><span class="meta">' + esc(meta) + '</span></button><button type="button" class="pin" aria-pressed="' + (state.pins.indexOf(key) > -1) + '" aria-label="' + (state.pins.indexOf(key) > -1 ? 'Unpin from Home: ' : 'Pin to Home: ') + esc(title) + '" data-action="pin-toggle" data-key="' + key + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3zM12 15v5"/></svg></button></div>'; }
@@ -1188,6 +1185,7 @@ function viewTools(){
   if (ui.sub.tools === 'feel') {
     h += '<section class="card"><p>Feelings show up in the body first. Naming the feeling, where it sits, and what it pushes you to do gives you a choice about what happens next.</p></section>' +
          toolRow('feel-new', '', 'feel', 'Name the feeling', 'Core feeling, body sensations, the urge, and what would help. About two minutes.') +
+         toolRow('moment-new', '', 'moment', 'Unpack a moment', 'One moment that stirred something up: your body, your feelings, what you needed. About three minutes.') +
          toolRow('panel', ' data-type="scan"', 'scan', 'Body scan', 'Seven slow stops from feet to face, noticing without changing') +
          toolRow('panel', ' data-type="urges"', 'urges', 'Urges and opposite action', 'What each feeling pushes you to do, and what helps instead') +
          toolRow('goto-pattern', '', 'pattern', 'Understand a pattern', 'A one-minute check, then one thing to try');
@@ -1195,7 +1193,7 @@ function viewTools(){
     h += toolRow('panel', ' data-type="breath"', 'breath', 'Paced breathing', 'A gentle pacer with a longer breath out') +
          toolRow('panel', ' data-type="ground"', 'ground', '5-4-3-2-1 sensory grounding', 'Bring your attention back to the room, one sense at a time') +
          toolRow('panel', ' data-type="pmr"', 'pmr', 'Progressive muscle relaxation', 'Tense and release, one muscle group at a time') +
-         toolRow('panel', ' data-type="shift"', 'shift', 'Shift your attention', 'Give your mind a different job for a few minutes') +
+         toolRow('panel', ' data-type="shift"', 'shift', 'Shifting attention', 'Two minutes with a songbird, moving your attention between what you see and what you hear') +
          toolRow('panel', ' data-type="bls"', 'bls', 'Side to side', 'A dot to follow with your eyes, or a soft chime moving ear to ear') +
          '<p class="hint">Each calming tool asks for your stress level before and after and saves it to your grounding record. You can stop any exercise at any point; what you did still counts. Pin the ones you use most to Home.</p>';
   } else {
@@ -1204,7 +1202,7 @@ function viewTools(){
   }
   return h + '</div>';
 }
-var TOOL_NAMES = { breath:'Paced breathing', ground:'5-4-3-2-1 grounding', pmr:'Progressive muscle relaxation', shift:'Attention shift', scan:'Body scan', bls:'Side to side' };
+var TOOL_NAMES = { breath:'Paced breathing', ground:'5-4-3-2-1 grounding', pmr:'Progressive muscle relaxation', shift:'Shifting attention', scan:'Body scan', bls:'Side to side' };
 function panelBefore(p){
   return '<div class="stack">' + backBtn('panel-close', 'Back to tools') + '<h1>' + esc(TOOL_NAMES[p.type]) + '</h1>' +
     '<section class="card"><p class="lbl">Before you start, how stressed do you feel right now?</p>' + scaleButtons('panel','before',0,10,-1,true) +
@@ -1430,7 +1428,8 @@ function finishBreath(complete){
 function art(vb, body, cls){ return '<svg class="art ' + (cls || '') + '" viewBox="' + vb + '" aria-hidden="true" focusable="false">' + body + '</svg>'; }
 var SENSE_ART = {
   see: '<path class="ln" d="M150 60c14-20 30-30 46-30s32 10 46 30c-14 20-30 30-46 30s-32-10-46-30z" transform="translate(-26 0)"/><circle class="a" cx="170" cy="60" r="13"/><circle class="iv" cx="174" cy="56" r="4"/>',
-  feel: '<g class="ln"><path d="M150 92V62c0-5 7-5 7 0v-24c0-5 8-5 8 0v20-26c0-5 8-5 8 0v26-22c0-5 8-5 8 0v26-14c0-5 7-5 7 0v26c0 14-10 24-24 24h-4c-10 0-18-6-21-14l-8-20c-2-5 4-8 7-4z"/></g>',
+  feel: '<rect class="a" x="150" y="58" width="42" height="42" rx="15"/><g class="hand"><path d="M156 66 152 36"/><path d="M166 64V28"/><path d="M177 64 179.5 31"/><path d="M187 68 192 44"/><path class="thumb" d="M157 92 140 72"/></g>' +
+    '<path class="ln lnt thin" d="M136 30l-6-5M139 46h-8M200 34l6-5M203 50h8M166 14v-4"/>',
   hear: '<path class="ln" d="M160 84c0 8 8 10 12 4 3-5 6-8 10-13 6-7 8-12 8-19 0-14-10-24-22-24s-22 10-22 22"/><path class="ln" d="M160 58c0-6 5-10 10-10s10 4 10 10c0 4-4 7-7 9"/><path class="ln lnt" d="M202 44c5 5 5 27 0 32M212 36c9 9 9 39 0 48"/>',
   smell: '<g transform="translate(170 64)"><circle class="t" cx="0" cy="-16" r="10"/><circle class="t" cx="15" cy="-5" r="10"/><circle class="t" cx="10" cy="13" r="10"/><circle class="t" cx="-10" cy="13" r="10"/><circle class="t" cx="-15" cy="-5" r="10"/><circle class="a" cx="0" cy="0" r="8"/></g><path class="ln" d="M170 86v22"/><path class="ln lnt" d="M196 30c4-4 0-8 4-12M206 36c4-4 0-8 4-12"/>',
   taste: '<path class="ln" d="M152 34h40l-6 66h-28z"/><path class="s" d="M155 58h34l-4 40h-26z"/><path class="ln lnt" d="M200 40c6 0 8 6 8 10"/>'
@@ -1467,18 +1466,6 @@ function bodyArt(on){
 }
 var PMR_PARTS = [['hands'],['arms'],['shoulders'],['head'],['chest','stomach'],['thighs'],['calves','feet']];
 var SCAN_PARTS = [['feet','calves','thighs'],['hips'],['stomach'],['chest'],['shoulders','arms','hands'],['head','neck'],'all'];
-var SHIFT_ART = [
-  '<rect class="iv" x="70" y="32" width="100" height="56" rx="14"/><text class="num sm" x="120" y="68" text-anchor="middle">100 · 93 · 86</text>',
-  '<rect class="iv" x="54" y="36" width="40" height="48" rx="10"/><rect class="iv" x="100" y="36" width="40" height="48" rx="10"/><rect class="iv" x="146" y="36" width="40" height="48" rx="10"/><text class="num" x="74" y="72" text-anchor="middle">A</text><text class="num" x="120" y="72" text-anchor="middle">B</text><text class="num" x="166" y="72" text-anchor="middle">C</text>',
-  '<rect class="a" x="86" y="46" width="46" height="44" rx="8"/><path class="ln" d="M132 56c12 0 12 22 0 22"/><circle class="ln lnt" cx="150" cy="44" r="18"/><path class="ln lnt" d="M163 57l16 16"/>',
-  '<circle class="a" cx="92" cy="60" r="9"/><path class="ln" d="M112 42c10 10 10 26 0 36M128 32c16 16 16 40 0 56"/><path class="ln lnt" d="M144 22c22 22 22 54 0 76"/>',
-  '<g transform="translate(86 26)">' + '<path class="a" d="M14 62c-8-1-10-10-9-20 1-11 3-20 11-26 7-5 14 0 14 10 0 8-3 13-5 20s0 16-11 16z"/><circle class="a" cx="10" cy="10" r="4.5"/><circle class="a" cx="19" cy="6" r="4"/><circle class="a" cx="27" cy="7" r="3.5"/><circle class="a" cx="33" cy="11" r="3"/>' +
-    '<g transform="translate(36 8)"><path class="t" d="M14 62c-8-1-10-10-9-20 1-11 3-20 11-26 7-5 14 0 14 10 0 8-3 13-5 20s0 16-11 16z"/><circle class="t" cx="10" cy="10" r="4.5"/><circle class="t" cx="19" cy="6" r="4"/><circle class="t" cx="27" cy="7" r="3.5"/><circle class="t" cx="33" cy="11" r="3"/></g></g>',
-  '<path class="s" d="M40 100c30-30 70-36 160-24v24z"/><path class="a" d="M92 60l22-18 22 18v26H92z"/><rect class="iv" x="108" y="68" width="12" height="18" rx="2"/><circle class="t" cx="168" cy="40" r="10"/><path class="ln" d="M114 86c4 6 18 10 34 14"/>',
-  '<path class="ln" d="M104 82V40l40-8v42"/><circle class="a" cx="96" cy="84" r="10"/><circle class="a" cx="136" cy="76" r="10"/><path class="ln lnt" d="M164 44c6-4 12-2 14 4M170 30c10-6 20-2 22 8"/>',
-  '<rect class="a" x="84" y="24" width="44" height="76" rx="10"/><rect class="iv" x="90" y="34" width="32" height="52" rx="4"/><path class="t" d="M136 34h52a10 10 0 0 1 10 10v20a10 10 0 0 1-10 10h-30l-14 12v-12h-8a10 10 0 0 1-10-10V44a10 10 0 0 1 10-10z"/><circle class="iv" cx="152" cy="54" r="3"/><circle class="iv" cx="164" cy="54" r="3"/><circle class="iv" cx="176" cy="54" r="3"/>'
-];
-function shiftArt(i){ return art('0 0 240 120', '<rect class="bg" x="0" y="0" width="240" height="120" rx="20"/>' + (SHIFT_ART[i] || SHIFT_ART[0]), 'art-step'); }
 var TOPIC_ART = {
   attention: '<path class="ln" d="M14 70c8 0 8-10 16-10s8 10 16 10 8-10 16-10"/><circle class="iv" cx="76" cy="54" r="30"/><circle class="ln" cx="76" cy="54" r="30"/><path class="ln lnt" d="M54 58c6 0 6-18 11-18s5 30 11 30 6-22 11-22 5 10 11 10"/><path class="ln" d="M98 76l18 18"/>',
   agency: '<path class="s" d="M0 104c24-34 64-52 120-40v56H0z"/><path class="ln" d="M22 112c18-6 18-16 34-22s22-12 30-24" stroke-dasharray="3 7"/><path class="ln" d="M90 64V28"/><path class="t" d="M90 28h22l-6 8 6 8H90z"/><circle class="a" cx="30" cy="38" r="9"/>',
@@ -1565,13 +1552,397 @@ function panelFeel(p){
        (s < 5 ? '<button type="button" class="btn btn-primary" data-action="feel-next"' + (s === 1 && !d.family ? ' disabled' : '') + '>Next</button>' : '<button type="button" class="btn btn-primary" data-action="feel-save">Save</button>') + '</div></section></div>';
   return h;
 }
-function panelShift(p){
-  var h = '<div class="stack">' + backBtn('panel-close', 'Back to tools') + '<h1>Shift your attention</h1>';
-  if (p.done) {
-    return h + panelAfter(p, '<p>Nicely done.</p>') + '<div class="row"><button type="button" class="btn btn-quiet" data-action="panel-close">Done</button></div></section></div>';
+/* ---------- shifting attention: the songbird practice ----------
+   Mindfulness as attention with purpose. Two minutes with a songbird on a branch and a
+   soundscape around it, in four 30-second turns: look, listen, look again, listen again.
+   A soft chime marks each switch so it still works with eyes closed during the listening turns.
+   The bird is drawn once and brought to life with the Web Animations API: it breathes and
+   blinks on its own, and every few seconds does something new (tilts its head, hops, turns,
+   preens, flutters, sings). Its song is synthesised at the same moment it opens its beak.
+   The soundscape (a stream, wind in the leaves, distant birds, a far-off dove) is synthesised
+   too, so nothing is downloaded, and it has its own volume so other tools cannot silence it. */
+var SHIFT_SECS = 120, SHIFT_TURN = 30;
+var SHIFT_TURNS = [
+  { kind:'look', title:'Look at the bird', text:'Let your eyes rest on the bird. Notice its colours and the pattern of its feathers. Watch what it does, how it moves, the expression on its face.' },
+  { kind:'listen', title:'Now listen', text:'Shift your attention to the sounds. You can close your eyes. What can you hear? Try to name each sound, and notice whether it is near or far.' },
+  { kind:'look', title:'Back to the bird', text:'Open your eyes and look again. Is there anything you did not notice the first time? A colour, a marking, a small movement?' },
+  { kind:'listen', title:'Back to the sounds', text:'Close your eyes again if you like. Is there a sound you missed before? Notice how each one rises, fades and changes.' }
+];
+function birdScene(){
+  /* A songbird facing right on a branch. Natural colours that stay the same in light and dark mode. */
+  return '<svg class="bird-scene" id="birdScene" viewBox="0 0 320 210" aria-hidden="true" focusable="false">' +
+    '<defs><linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" class="sky1"/><stop offset="1" class="sky2"/></linearGradient></defs>' +
+    '<rect width="320" height="210" rx="22" fill="url(#skyG)"/>' +
+    '<g class="cloud" id="cloud1"><ellipse cx="70" cy="40" rx="26" ry="9"/><ellipse cx="86" cy="34" rx="16" ry="9"/></g>' +
+    '<g class="cloud" id="cloud2"><ellipse cx="250" cy="28" rx="20" ry="7"/><ellipse cx="262" cy="24" rx="12" ry="7"/></g>' +
+    '<path class="hill" d="M0 186C60 166 120 172 170 180S270 170 320 160V210H0Z"/>' +
+    '<g class="leafy" id="leavesBack"><ellipse cx="292" cy="112" rx="18" ry="8" transform="rotate(-30 292 112)"/><ellipse cx="300" cy="140" rx="16" ry="7" transform="rotate(20 300 140)"/><ellipse cx="22" cy="132" rx="16" ry="7" transform="rotate(25 22 132)"/></g>' +
+    '<path class="branch" d="M-4 166C40 158 80 156 120 156S220 154 262 148 300 136 326 126" />' +
+    '<path class="twig" d="M232 152C244 140 250 128 252 116M70 158C62 146 58 136 60 124" />' +
+    '<g class="leafy" id="leavesA" style="transform-origin:252px 118px"><ellipse cx="252" cy="108" rx="7" ry="13" transform="rotate(20 252 108)"/><ellipse cx="262" cy="118" rx="6" ry="11" transform="rotate(70 262 118)"/></g>' +
+    '<g class="leafy" id="leavesB" style="transform-origin:60px 126px"><ellipse cx="58" cy="114" rx="6.5" ry="12" transform="rotate(-15 58 114)"/><ellipse cx="48" cy="124" rx="6" ry="11" transform="rotate(-70 48 124)"/></g>' +
+    '<g transform="translate(160 157) scale(1.6) translate(-160 -157)"><g id="birdMove"><g id="birdFace" style="transform-origin:160px 0">' +
+      '<g id="tail" style="transform-origin:134px 128px"><path class="b-dark" d="M136 124 98 146 104 152 140 134Z"/><path class="b-back" d="M136 126 100 150 108 154 141 133Z"/></g>' +
+      '<g class="b-legs"><path d="M154 140 152 156M166 140 168 156"/><path d="M146 157h12M162 157h12"/></g>' +
+      '<g id="birdBody" style="transform-origin:158px 140px">' +
+        '<ellipse class="b-back" cx="156" cy="120" rx="31" ry="23" transform="rotate(-12 156 120)"/>' +
+        '<ellipse class="b-breast" cx="168" cy="125" rx="20" ry="18"/>' +
+        '<ellipse class="b-belly" cx="158" cy="137" rx="17" ry="7"/>' +
+        '<g id="wing" style="transform-origin:160px 108px"><path class="b-dark" d="M134 112C146 100 166 102 172 112 168 126 150 134 132 132 126 126 128 118 134 112Z"/>' +
+          '<path class="b-bar" d="M140 116C148 112 158 112 164 116M138 123C146 120 154 120 160 123"/></g>' +
+      '</g>' +
+      '<g id="birdHead" style="transform-origin:172px 108px">' +
+        '<circle class="b-back" cx="178" cy="96" r="15"/>' +
+        '<path class="b-breast" d="M168 104C172 112 184 112 190 102 188 108 180 113 172 111Z"/>' +
+        '<circle class="b-ring" cx="184" cy="92" r="4.8"/><circle class="b-eye" cx="184.5" cy="92" r="3.3"/><circle class="b-shine" cx="185.6" cy="90.8" r="1"/>' +
+        '<ellipse class="b-lid" id="eyelid" cx="184.5" cy="92" rx="5" ry="5" style="transform-origin:184.5px 87px;transform:scaleY(0)"/>' +
+        '<path class="b-beak" d="M191 92 205 95.5 191 98Z"/>' +
+        '<path class="b-beak b-beak-lo" id="beakLo" d="M191 97 203 97 191 100Z" style="transform-origin:191px 97px"/>' +
+      '</g>' +
+    '</g></g>' +
+    '<g id="notes" class="notes"></g></g>' +
+  '</svg>';
+}
+/* ---------- unpack a moment ----------
+   A short, repeatable look at one moment that stirred something up: who it was with, what the
+   body noticed, what showed on the surface, what might be underneath, the need, and what the
+   patient did. The body comes before emotions because many people with FND notice the body
+   first, or only. "Not sure" and "Nothing I noticed" are full answers, and every step can be
+   skipped. The summary says what happened together and never that one thing caused another. */
+var MOMENT_WHO = ['Partner','Family','Friend','Healthcare provider','Work','Just me','Other'];
+var MOMENT_BODY = ['Symptoms flared','Shaky','Tense','Heavy or weak','Foggy','Spaced out / far away','Exhausted','Nothing I noticed'];
+var MOMENT_SURFACE = ['Angry','Defensive','Irritated','Shut down','Numb','Anxious','Not sure'];
+var MOMENT_UNDER = ['Hurt','Scared','Ashamed','Sad','Lonely','Dismissed','Like a burden','Not sure'];
+var MOMENT_NEEDS = ['That I\'m believed','That I\'m not a burden','That you\'ll still be here','That you see how I feel','That I\'m loved even when I\'m struggling','That we\'re okay','That I can still do things for myself','That someone will help when I need it'];
+var MOMENT_DID = ['Pushed through','Hid my symptoms','Pulled away','Tried to please','Sought reassurance','Handled it alone','Downplayed it','Other'];
+/* Options that stand alone: choosing one clears the others, and choosing another clears it. */
+var MOMENT_ALONE = ['Nothing I noticed','Not sure'];
+var MOMENT_LIMIT = { body:2, surface:2, under:2, did:2 };
+var MOMENT_STEPS = 7;
+function newMoment(){ return { what:'', who:'', whoOther:'', body:[], surface:[], under:[], need:'', did:[], didOther:'' }; }
+function lowerFirst(s){ return s ? s.charAt(0).toLowerCase() + s.slice(1) : s; }
+function andList(a){ return a.length < 2 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
+function momentSummary(m){
+  var out = [];
+  var whoPh = { 'Partner':'with my partner', 'Family':'with family', 'Friend':'with a friend', 'Healthcare provider':'with a healthcare provider', 'Work':'at work', 'Just me':'when I was on my own' }[m.who];
+  if (m.who === 'Other' && m.whoOther && m.whoOther.trim()) whoPh = 'with ' + m.whoOther.trim();
+  if (whoPh) out.push('This was ' + whoPh + '.');
+  var body = (m.body || []).filter(function(b){ return b !== 'Nothing I noticed'; });
+  if ((m.body || []).indexOf('Nothing I noticed') > -1) out.push('I did not notice anything in my body.');
+  else if (body.length) {
+    var flare = body.indexOf('Symptoms flared') > -1, adj = body.filter(function(b){ return b !== 'Symptoms flared'; }).map(function(b){ return b === 'Spaced out / far away' ? 'spaced out' : b.toLowerCase(); });
+    out.push(flare ? 'My symptoms flared' + (adj.length ? ' and my body felt ' + andList(adj) : '') + '.' : 'My body felt ' + andList(adj) + '.');
   }
-  return h + '<section class="card"><p class="hint">When symptoms flare, watching them closely can keep them going. Giving your mind a job can help. This is not about ignoring how you feel. It is a way to let your system settle.</p>' +
-    shiftArt(p.i) + '<p class="bigtext" id="stepText">' + esc(SHIFTS[p.i]) + '</p>' + '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +'<div class="row"><button type="button" class="btn" data-action="shift-next">Another idea</button><button type="button" class="btn btn-primary" data-action="shift-done">I did it</button></div></section></div>';
+  var sNS = (m.surface || []).indexOf('Not sure') > -1, uNS = (m.under || []).indexOf('Not sure') > -1;
+  var s = (m.surface || []).filter(function(x){ return x !== 'Not sure'; }).map(function(x){ return x.toLowerCase(); });
+  var u = (m.under || []).filter(function(x){ return x !== 'Not sure'; }).map(function(x){ return x.toLowerCase(); });
+  if (s.length && u.length) out.push('I felt ' + andList(s) + ' on the surface and ' + andList(u) + ' underneath.');
+  else if (s.length) out.push('I felt ' + andList(s) + ' on the surface' + (uNS ? ', and I am not sure what was underneath.' : '.'));
+  else if (u.length) out.push((sNS ? 'I was not sure what showed on the surface, but underneath I felt ' : 'Underneath, I felt ') + andList(u) + '.');
+  else if (sNS || uNS) out.push('I was not sure what I was feeling, and that is okay.');
+  if (m.need) out.push('I needed to know ' + m.need.replace(/^That /, '') + '.');
+  var did = (m.did || []).map(function(d){ return d === 'Other' ? (m.didOther && m.didOther.trim() ? lowerFirst(m.didOther.trim()) : '') : lowerFirst(d); }).filter(Boolean);
+  if (did.length) out.push('I ' + andList(did) + '.');
+  return out.join(' ');
+}
+function momentChips(field, opts){
+  var d = ui.draftMoment, sel = d[field] || [];
+  return '<div class="chips" role="group">' + opts.map(function(v){
+    return '<button type="button" class="chip" aria-pressed="' + (sel.indexOf(v) > -1) + '" data-action="moment-chip" data-field="' + field + '" data-val="' + esc(v) + '">' + esc(v) + '</button>';
+  }).join('') + '</div>';
+}
+function panelMoment(p){
+  var d = ui.draftMoment, s = ui.momentStep || 1, h = '<div class="stack">' + (p.done ? backBtn('panel-close', 'Back to tools') : backBtn('moment-cancel', 'Cancel'));
+  if (p.done) {
+    var m = byId(state.moments, p.savedId) || d;
+    return h + '<section class="card card-good"><h1>Saved</h1>' +
+      '<div class="moment-card">' + (m.what ? '<p class="moment-what">' + esc(m.what) + '</p>' : '') + '<p>' + esc(momentSummary(m)) + '</p></div>' +
+      '<p class="hint">Saved to your moments log. Over time, the moments you unpack can show patterns in what you need. Looking at them with your clinician can help.</p>' +
+      '<p class="lbl">What would help a little right now?</p>' +
+      '<div class="row"><button type="button" class="btn btn-primary" data-action="open-tool" data-type="ground">A short grounding exercise</button><button type="button" class="btn" data-action="open-tool" data-type="breath">Paced breathing</button><button type="button" class="btn btn-quiet" data-action="panel-close">I am okay for now</button></div></section></div>';
+  }
+  h += '<section class="card"><div class="item-head"><h2>Unpack a moment</h2><span class="val">Step ' + s + ' of ' + MOMENT_STEPS + '</span></div><div class="bar" aria-hidden="true"><span style="width:' + Math.round(s / MOMENT_STEPS * 100) + '%"></span></div>';
+  if (s === 1) {
+    h += '<p class="hint">Think of one recent moment that stirred something up. Everything here is optional, and "not sure" is always a fine answer. If you feel an episode coming on, use your grounding or flare plan first and come back to this later.</p>' +
+      lineField('moment', 'what', 'What happened?', d.what, 'One line is plenty. For example: after my appointment') +
+      '<p class="hint">Optional. To speak instead of type, tap the microphone on your keyboard.</p>' +
+      '<div class="field"><span class="lbl">Who was it with?</span>' + radioGroup('moment', 'who', MOMENT_WHO, d.who) + '</div>' +
+      (d.who === 'Other' ? lineField('moment', 'whoOther', 'Who?', d.whoOther, 'Optional') : '');
+  } else if (s === 2) {
+    h += '<p class="lbl">What did your body notice?</p><p class="hint">Pick up to 2. Many people with FND notice changes in the body before, or instead of, emotions. "Nothing I noticed" is a fine answer.</p>' + momentChips('body', MOMENT_BODY);
+  } else if (s === 3) {
+    h += '<p class="lbl">What showed on the surface?</p><p class="hint">Pick up to 2. This is the feeling other people might have seen.</p>' + momentChips('surface', MOMENT_SURFACE) +
+      '<p class="hint">Naming feelings can be hard, especially with FND. There is no wrong answer here.</p>';
+  } else if (s === 4) {
+    h += '<p class="lbl">What might be underneath?</p><p class="hint">Pick up to 2, or skip. This is the softer feeling that can sit below the surface one.</p>' + momentChips('under', MOMENT_UNDER) +
+      '<p class="hint">Naming feelings can be hard, especially with FND. There is no wrong answer here.</p>';
+  } else if (s === 5) {
+    h += '<p class="lbl">What I needed to know</p><p class="hint">Pick the one that fits best.</p>' + radioGroup('moment', 'need', MOMENT_NEEDS, d.need);
+  } else if (s === 6) {
+    h += '<p class="lbl">What I did</p><p class="hint">Pick up to 2. These are ways of protecting yourself, and they all make sense. Noticing them gives you more choice next time.</p>' + momentChips('did', MOMENT_DID) +
+      ((d.did || []).indexOf('Other') > -1 ? lineField('moment', 'didOther', 'What did you do?', d.didOther, 'For example: went quiet') : '');
+  } else {
+    var sum = momentSummary(d);
+    h += '<p class="lbl">Your summary</p><div class="moment-card">' + (d.what ? '<p class="moment-what">' + esc(d.what) + '</p>' : '') + '<p>' + (sum ? esc(sum) : 'You skipped every question, and that is okay. You can still save this moment, or go back and add anything that feels right.') + '</p></div>' +
+      '<p class="hint">This describes what happened together in one moment. It does not mean one thing caused another.</p>';
+  }
+  h += '<div class="row">' + (s > 1 ? '<button type="button" class="btn btn-quiet" data-action="moment-back">Back</button>' : '') +
+    (s < MOMENT_STEPS ? '<button type="button" class="btn btn-primary" data-action="moment-next">' + (momentStepEmpty(d, s) && s > 1 ? 'Skip' : 'Next') + '</button>' : '<button type="button" class="btn btn-primary" data-action="moment-save">Save</button>') + '</div></section></div>';
+  return h;
+}
+function momentStepEmpty(d, s){
+  var f = { 2:'body', 3:'surface', 4:'under', 5:'need', 6:'did' }[s];
+  if (!f) return false;
+  return Array.isArray(d[f]) ? !d[f].length : !d[f];
+}
+function viewMoments(){
+  var h = '<section class="card"><h2>Moments log</h2><p class="hint">Each moment you unpack lands here. These stay on your phone and are only added to a report if you tick the box on the share screen.</p><div><button type="button" class="btn btn-primary" data-action="moment-new">Unpack a moment</button></div></section>';
+  if (!state.moments.length) return h + '<section class="card"><p class="hint">No moments yet.</p></section>';
+  var recent = state.moments.slice(0, 30), needs = {};
+  recent.forEach(function(m){ if (m.need) needs[m.need] = (needs[m.need] || 0) + 1; });
+  var topNeed = Object.keys(needs).sort(function(a,b){ return needs[b] - needs[a]; })[0];
+  if (recent.length >= 3 && topNeed && needs[topNeed] >= 2) h += '<section class="card card-accent"><p class="eyebrow">A pattern</p><p>The need that comes up most often in your recent moments: <strong>' + esc(lowerFirst(topNeed)) + '</strong> (' + needs[topNeed] + ' of ' + recent.length + ').</p></section>';
+  h += '<section class="card"><h2>Recent</h2><ul class="list">' + recent.map(function(m){
+    var confirm = ui.confirmDel === 'moment:' + m.id;
+    return '<li class="item"><div class="meta">' + esc(fmtWhen(m.ts)) + '</div>' + (m.what ? '<strong>' + esc(m.what) + '</strong>' : '') + '<div>' + esc(momentSummary(m)) + '</div>' +
+      '<div><button type="button" class="link ' + (confirm ? 'link-danger' : '') + '" data-action="moment-del" data-id="' + m.id + '">' + (confirm ? 'Tap again to delete' : 'Delete') + '</button></div></li>';
+  }).join('') + '</ul></section>';
+  return h;
+}
+
+function panelShift(p){
+  var h = '<div class="stack">' + backBtn('panel-close', 'Back to tools');
+  if (p.done) {
+    return h + panelAfter(p, '<h1>Well done</h1><p>You chose where to put your attention four times. Each time it wandered and you brought it back, that was the practice.</p>' +
+      '<p>You can do this anywhere: with a candle, your breath, a cup of tea, or the sounds in a room.</p>') +
+      '<div class="row"><button type="button" class="btn btn-primary" data-action="shift-again">Go again</button><button type="button" class="btn btn-quiet" data-action="panel-close">Done</button></div></section></div>';
+  }
+  if (p.running) {
+    return h + '<section class="card shift-card"><div class="item-head"><span class="eyebrow">Shifting attention</span><span class="val" id="shiftLeft"></span></div>' +
+      '<div class="shift-steps" aria-hidden="true">' + SHIFT_TURNS.map(function(t, i){ return '<span class="shift-step" data-turn="' + i + '">' + (t.kind === 'look' ? 'Look' : 'Listen') + '</span>'; }).join('') + '</div>' +
+      birdScene() +
+      '<div class="shift-prompt" aria-live="polite"><p class="shift-kind" id="shiftKind"></p><p class="bigtext" id="shiftTitle"></p><p id="shiftText"></p></div>' +
+      '<p class="hint">Your attention may drift to something else. That is natural. Notice where it went, then gently bring it back.</p>' +
+      '<div class="row"><button type="button" class="btn btn-quiet" data-action="shift-sound">' + (p.sound ? 'Sound off' : 'Sound on') + '</button><button type="button" class="btn btn-quiet" data-action="shift-stop">Finish early</button></div></section></div>';
+  }
+  return h + '<h1>Shifting attention</h1><section class="card">' +
+    '<div id="stepText"><p>Mindfulness is attention with purpose. It means choosing where to direct your attention, towards a certain thing or object, like a candle or your breath, and gently keeping it there.</p>' +
+    '<p>In this practice you will spend two minutes with a songbird and the sounds of nature around it. You will move your attention four times, every 30 seconds:</p>' +
+    '<ol class="prose" style="margin:0; padding-left:22px"><li>Look at the bird: its colours, feathers, behaviour and expressions.</li><li>Listen to the sounds and name what you hear.</li><li>Look again for things you did not notice before.</li><li>Listen again for sounds you missed.</li></ol>' +
+    '<p>Your attention will probably wander to something else. That is natural, and noticing it is part of the skill.</p></div>' +
+    '<div><button type="button" class="btn btn-quiet" data-action="read-aloud" data-text-id="stepText">Read aloud</button></div>' +
+    '<p class="hint">Turn your sound on, or use headphones. A soft chime marks each switch.</p>' +
+    '<button type="button" class="btn btn-primary btn-wide" data-action="shift-start">Start, 2 minutes</button></section></div>';
+}
+
+/* --- the bird's behaviour --- */
+var bird = { x:0, face:1, busy:false, next:0, blinkAt:0, anims:[] };
+function birdAnim(el, frames, opts){
+  if (!el || !el.animate) return null;
+  try { var a = el.animate(frames, opts); bird.anims.push(a); return a; } catch(e){ return null; }
+}
+function birdSet(){
+  var m = $('#birdMove'), f = $('#birdFace');
+  if (m) m.style.transform = 'translate(' + bird.x + 'px,0)';
+  if (f) f.style.transform = 'scaleX(' + bird.face + ')';
+}
+function birdBlink(){
+  birdAnim($('#eyelid'), [{transform:'scaleY(0)'},{transform:'scaleY(1)', offset:0.45},{transform:'scaleY(1)', offset:0.55},{transform:'scaleY(0)'}], {duration:220, easing:'ease-in-out'});
+}
+function birdDo(kind, sound){
+  var head = $('#birdHead'), body = $('#birdBody'), wing = $('#wing'), tail = $('#tail'), beak = $('#beakLo'), move = $('#birdMove'), face = $('#birdFace');
+  var ms = 1200;
+  if (kind === 'tilt') {
+    var d = Math.random() < 0.5 ? 16 : -12;
+    birdAnim(head, [{transform:'rotate(0)'},{transform:'rotate(' + d + 'deg)', offset:0.2},{transform:'rotate(' + d + 'deg)', offset:0.75},{transform:'rotate(0)'}], {duration:1800, easing:'ease-in-out'}); ms = 1900;
+  } else if (kind === 'look') {
+    birdAnim(head, [{transform:'rotate(0)'},{transform:'rotate(-14deg)', offset:0.15},{transform:'rotate(-14deg)', offset:0.4},{transform:'rotate(10deg)', offset:0.55},{transform:'rotate(10deg)', offset:0.85},{transform:'rotate(0)'}], {duration:1700, easing:'ease-in-out'}); ms = 1800;
+  } else if (kind === 'preen') {
+    birdAnim(head, [{transform:'rotate(0)'},{transform:'rotate(-58deg) translate(-6px,6px)', offset:0.25},{transform:'rotate(-52deg) translate(-6px,6px)', offset:0.4},{transform:'rotate(-60deg) translate(-6px,7px)', offset:0.55},{transform:'rotate(-54deg) translate(-6px,6px)', offset:0.7},{transform:'rotate(0)'}], {duration:2200, easing:'ease-in-out'});
+    birdAnim(wing, [{transform:'rotate(0)'},{transform:'rotate(-8deg)', offset:0.4},{transform:'rotate(0)'}], {duration:2200}); ms = 2300;
+  } else if (kind === 'flutter') {
+    birdAnim(wing, [{transform:'rotate(0)'},{transform:'rotate(-30deg)'},{transform:'rotate(4deg)'},{transform:'rotate(-26deg)'},{transform:'rotate(4deg)'},{transform:'rotate(-20deg)'},{transform:'rotate(0)'}], {duration:700, easing:'ease-in-out'});
+    birdAnim(tail, [{transform:'rotate(0)'},{transform:'rotate(-14deg)'},{transform:'rotate(6deg)'},{transform:'rotate(0)'}], {duration:700});
+    birdAnim(body, [{transform:'scale(1)'},{transform:'scale(1.06,1.03)', offset:0.4},{transform:'scale(1)'}], {duration:700}); ms = 900;
+  } else if (kind === 'tail') {
+    birdAnim(tail, [{transform:'rotate(0)'},{transform:'rotate(-18deg)', offset:0.3},{transform:'rotate(4deg)', offset:0.6},{transform:'rotate(0)'}], {duration:600, easing:'ease-out'}); ms = 700;
+  } else if (kind === 'turn') {
+    var to = -bird.face;
+    birdAnim(face, [{transform:'scaleX(' + bird.face + ')'},{transform:'scaleX(0.1)', offset:0.5},{transform:'scaleX(' + to + ')'}], {duration:360, easing:'ease-in-out'});
+    bird.face = to; setTimeout(birdSet, 340); ms = 600;
+  } else if (kind === 'hop') {
+    /* Hop along the branch, turning first if the bird is facing away from where it goes. */
+    var dir = bird.x > 14 ? -1 : bird.x < -14 ? 1 : (Math.random() < 0.5 ? -1 : 1);
+    if (dir !== bird.face) { birdDo('turn'); setTimeout(function(){ hop(dir); }, 450); return 1500; }
+    hop(dir); ms = 1000;
+  } else if (kind === 'sing') {
+    var n = 3 + Math.floor(Math.random() * 4), gap = 190;
+    for (var i = 0; i < n; i++) (function(i){
+      setTimeout(function(){
+        birdAnim(beak, [{transform:'rotate(0)'},{transform:'rotate(26deg)', offset:0.35},{transform:'rotate(0)'}], {duration:170});
+        birdAnim(body, [{transform:'scale(1)'},{transform:'scale(1.04)', offset:0.4},{transform:'scale(1)'}], {duration:170});
+        if (i % 2 === 0) floatNote();
+      }, i * gap);
+    })(i);
+    birdAnim(head, [{transform:'rotate(0)'},{transform:'rotate(-10deg)', offset:0.1},{transform:'rotate(-10deg)', offset:0.9},{transform:'rotate(0)'}], {duration:n * gap + 300});
+    if (sound) birdSong(n, gap / 1000);
+    ms = n * gap + 600;
+  }
+  return ms;
+  function hop(dir){
+    var from = bird.x, to = Math.max(-30, Math.min(30, from + dir * (14 + Math.random() * 10)));
+    birdAnim(move, [{transform:'translate(' + from + 'px,0)'},{transform:'translate(' + ((from + to) / 2) + 'px,-16px)', offset:0.45},{transform:'translate(' + to + 'px,0)', offset:0.85},{transform:'translate(' + to + 'px,1.5px)', offset:0.92},{transform:'translate(' + to + 'px,0)'}], {duration:520, easing:'ease-in-out'});
+    birdAnim(wing, [{transform:'rotate(0)'},{transform:'rotate(-22deg)', offset:0.4},{transform:'rotate(0)'}], {duration:520});
+    bird.x = to; setTimeout(birdSet, 500);
+  }
+}
+function floatNote(){
+  var g = $('#notes'); if (!g) return;
+  var bx = 160 + bird.x + bird.face * 44, by = 86, ns = 'http://www.w3.org/2000/svg';
+  var n = document.createElementNS(ns, 'path');
+  n.setAttribute('d', 'M0 0v-12l7 -2v10M0 0a3 2.4 0 1 1 -0.1 0M7 -4a3 2.4 0 1 1 -0.1 0');
+  n.setAttribute('class', 'note'); n.setAttribute('transform', 'translate(' + bx + ' ' + by + ')');
+  g.appendChild(n);
+  var dx = bird.face * (14 + Math.random() * 16);
+  var a = birdAnim(n, [{transform:'translate(0,0)', opacity:0},{transform:'translate(' + (dx * 0.3) + 'px,-6px)', opacity:1, offset:0.2},{transform:'translate(' + dx + 'px,-34px)', opacity:0}], {duration:1500, easing:'ease-out'});
+  setTimeout(function(){ if (n.parentNode) n.parentNode.removeChild(n); }, 1550);
+}
+/* Each behaviour is picked at random, with singing and small head movements the most common. */
+function birdTick(now, sound){
+  if (now >= bird.blinkAt) { birdBlink(); bird.blinkAt = now + 2200 + Math.random() * 3200; }
+  if (now < bird.next) return;
+  var pool = ['sing','sing','sing','tilt','tilt','look','look','hop','hop','preen','flutter','tail','tail','turn'];
+  var k = pool[Math.floor(Math.random() * pool.length)];
+  var ms = birdDo(k, sound);
+  bird.next = now + ms + 700 + Math.random() * 1800;
+}
+function stopBird(){ bird.anims.forEach(function(a){ try { a.cancel(); } catch(e){} }); bird.anims = []; }
+
+/* --- the soundscape --- */
+var nature = { gain:null, nodes:[], timer:null, nextBird:0, nextDove:0, babble:null, wind:null, leaves:null };
+function natureNoise(secs, brown){
+  var len = Math.floor(audioCtx.sampleRate * secs), b = audioCtx.createBuffer(1, len, audioCtx.sampleRate), d = b.getChannelData(0), last = 0;
+  for (var i = 0; i < len; i++) { var w = Math.random() * 2 - 1; if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w; }
+  return b;
+}
+function natureLoop(buf, filterType, freq, q, level){
+  var c = audioCtx, s = c.createBufferSource(), f = c.createBiquadFilter(), g = c.createGain();
+  s.buffer = buf; s.loop = true; f.type = filterType; f.frequency.value = freq; f.Q.value = q; g.gain.value = level;
+  s.connect(f); f.connect(g); g.connect(nature.gain); s.start();
+  nature.nodes.push(s);
+  return { src:s, filter:f, gain:g };
+}
+function natureOut(pan){
+  if (audioCtx.createStereoPanner) { var sp = audioCtx.createStereoPanner(); sp.pan.value = pan; sp.connect(nature.gain); return sp; }
+  return nature.gain;
+}
+/* One bird phrase: short whistled notes that sweep in pitch, with a little warble. */
+function chirp(t, f0, f1, dur, peak, out, warble){
+  var c = audioCtx, o = c.createOscillator(), g = c.createGain();
+  o.type = 'sine';
+  o.frequency.setValueAtTime(f0, t); o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+  if (warble) { var lfo = c.createOscillator(), lg = c.createGain(); lfo.frequency.value = warble; lg.gain.value = f0 * 0.04; lfo.connect(lg); lg.connect(o.frequency); lfo.start(t); lfo.stop(t + dur + 0.05); }
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + Math.min(0.02, dur / 3)); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(out); o.start(t); o.stop(t + dur + 0.05);
+}
+function birdSong(n, gap){
+  if (!nature.gain) return;
+  var t = audioCtx.currentTime + 0.02, out = natureOut(bird.x / 60);
+  for (var i = 0; i < n; i++) {
+    var hi = 2900 + Math.random() * 900;
+    if (i === n - 1 && n > 3) { for (var j = 0; j < 5; j++) chirp(t + i * gap + j * 0.045, hi * 1.25, hi * 0.9, 0.04, 0.12, out); }
+    else chirp(t + i * gap, hi, hi * (Math.random() < 0.5 ? 1.35 : 0.72), 0.11 + Math.random() * 0.05, 0.16, out, 38);
+  }
+}
+function distantBird(){
+  var t = audioCtx.currentTime + 0.05, out = natureOut(Math.random() < 0.5 ? -0.7 : 0.7), kind = Math.floor(Math.random() * 3), base = 2400 + Math.random() * 1400;
+  if (kind === 0) { for (var i = 0; i < 2; i++) chirp(t + i * 0.32, base * 1.2, base, 0.18, 0.028, out, 24); }
+  else if (kind === 1) { for (var k = 0; k < 7; k++) chirp(t + k * 0.07, base * 1.3, base * 0.95, 0.05, 0.022, out); }
+  else { chirp(t, base * 0.8, base * 1.3, 0.35, 0.026, out, 18); chirp(t + 0.42, base * 1.3, base * 0.7, 0.3, 0.022, out); }
+}
+function dove(){
+  /* A far-off dove: soft, low hoots. */
+  var c = audioCtx, t = c.currentTime + 0.05, out = natureOut(-0.4 + Math.random() * 0.8);
+  [[0, 0.5, 520, 470], [0.62, 0.32, 600, 560], [1.05, 0.45, 520, 480], [1.6, 0.45, 520, 480]].forEach(function(h){
+    var o = c.createOscillator(), g = c.createGain(), f = c.createBiquadFilter();
+    o.type = 'triangle'; f.type = 'lowpass'; f.frequency.value = 900;
+    o.frequency.setValueAtTime(h[2], t + h[0]); o.frequency.linearRampToValueAtTime(h[3], t + h[0] + h[1]);
+    g.gain.setValueAtTime(0.0001, t + h[0]); g.gain.exponentialRampToValueAtTime(0.05, t + h[0] + 0.08); g.gain.exponentialRampToValueAtTime(0.0001, t + h[0] + h[1]);
+    o.connect(f); f.connect(g); g.connect(out); o.start(t + h[0]); o.stop(t + h[0] + h[1] + 0.05);
+  });
+}
+function startNature(on){
+  if (!audioReady()) return false;
+  stopNature();
+  var c = audioCtx;
+  nature.gain = c.createGain(); nature.gain.gain.value = 0.0001; nature.gain.connect(c.destination);
+  if (on) nature.gain.gain.exponentialRampToValueAtTime(0.9, c.currentTime + 2);
+  var white = natureNoise(3, false), brown = natureNoise(4, true);
+  nature.babble = natureLoop(white, 'bandpass', 1400, 0.7, 0.05);   /* water moving over stones */
+  natureLoop(brown, 'lowpass', 500, 0.5, 0.35);                      /* the low rush of the stream */
+  nature.wind = natureLoop(brown, 'lowpass', 260, 0.4, 0.15);        /* wind */
+  nature.leaves = natureLoop(white, 'highpass', 3200, 0.3, 0.004);   /* leaves rustling */
+  var t0 = Date.now(); nature.nextBird = t0 + 1500; nature.nextDove = t0 + 9000 + Math.random() * 8000;
+  nature.timer = setInterval(function(){
+    if (!nature.gain) return;
+    var t = c.currentTime, now = Date.now();
+    try {
+      nature.babble.filter.frequency.setTargetAtTime(900 + Math.random() * 1800, t, 0.05);
+      nature.babble.gain.gain.setTargetAtTime(0.025 + Math.random() * 0.05, t, 0.04);
+      if (Math.random() < 0.05) nature.wind.gain.gain.setTargetAtTime(0.06 + Math.random() * 0.28, t, 1.4);
+      if (Math.random() < 0.05) nature.leaves.gain.gain.setTargetAtTime(Math.random() < 0.4 ? 0.02 + Math.random() * 0.02 : 0.003, t, 0.6);
+      if (now >= nature.nextBird) { distantBird(); nature.nextBird = now + 2500 + Math.random() * 5000; }
+      if (now >= nature.nextDove) { dove(); nature.nextDove = now + 16000 + Math.random() * 14000; }
+    } catch(e){}
+  }, 90);
+  return true;
+}
+function natureVolume(on){
+  if (!nature.gain) return;
+  try { var t = audioCtx.currentTime; nature.gain.gain.cancelScheduledValues(t); nature.gain.gain.setValueAtTime(Math.max(0.0001, nature.gain.gain.value), t); nature.gain.gain.exponentialRampToValueAtTime(on ? 0.9 : 0.0001, t + 0.6); } catch(e){}
+}
+function stopNature(){
+  if (nature.timer) { clearInterval(nature.timer); nature.timer = null; }
+  var g = nature.gain, nodes = nature.nodes;
+  nature.gain = null; nature.nodes = [];
+  if (!g) return;
+  try { var t = audioCtx.currentTime; g.gain.cancelScheduledValues(t); g.gain.setValueAtTime(Math.max(0.0001, g.gain.value), t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.8); } catch(e){}
+  setTimeout(function(){ nodes.forEach(function(s){ try { s.stop(); } catch(e){} }); try { g.disconnect(); } catch(e){} }, 1000);
+}
+function natureRunning(){ return !!nature.gain; }
+
+/* --- the two-minute timer --- */
+function startShiftLoop(){
+  var p = ui.panel, lastTurn = -1;
+  try { if (navigator.wakeLock && navigator.wakeLock.request) navigator.wakeLock.request('screen').then(function(l){ timers.wl = l; }).catch(function(){}); } catch(e){}
+  birdSet(); bird.next = Date.now() + 900; bird.blinkAt = Date.now() + 1500;
+  function tick(){
+    var el = Date.now() - p.t0;
+    if (el >= SHIFT_SECS * 1000) { finishShift(true); return; }
+    var turn = Math.min(SHIFT_TURNS.length - 1, Math.floor(el / (SHIFT_TURN * 1000))), tt = SHIFT_TURNS[turn];
+    if (turn !== lastTurn) {
+      if (lastTurn !== -1 && p.sound) chime(0);
+      lastTurn = turn; p.turn = turn;
+      var k = $('#shiftKind'), ti = $('#shiftTitle'), tx = $('#shiftText'), card = $('.shift-card');
+      if (k) k.textContent = (tt.kind === 'look' ? 'Look' : 'Listen') + ' · ' + (turn + 1) + ' of 4';
+      if (ti) ti.textContent = tt.title; if (tx) tx.textContent = tt.text;
+      if (card) card.setAttribute('data-kind', tt.kind);
+      Array.prototype.forEach.call(document.querySelectorAll('.shift-step'), function(s){ var i = +s.getAttribute('data-turn'); s.className = 'shift-step' + (i < turn ? ' done' : i === turn ? ' on' : ''); });
+    }
+    var turnLeft = Math.ceil((SHIFT_TURN * 1000 - (el % (SHIFT_TURN * 1000))) / 1000), left = $('#shiftLeft');
+    if (left) left.textContent = turnLeft + ' s';
+    birdTick(Date.now(), p.sound);
+  }
+  tick();
+  timers.loop = setInterval(tick, 100);
+}
+function finishShift(complete){
+  var p = ui.panel; if (!p || p.type !== 'shift') return;
+  var el = Date.now() - p.t0, mins = complete ? 2 : Math.max(0, Math.round(el / 60000));
+  p.running = false; p.done = true; p.minutesDone = mins; p.after = -1;
+  stopNature(); stopBird();
+  if (p.before < 0) saveGrounding(p, mins);
+  render();
 }
 function findEx(id){ return EXERCISES.filter(function(x){ return x.id === id; })[0]; }
 function panelMove(p){
@@ -1594,7 +1965,7 @@ function panelMove(p){
    woodblock sounds: a very short, slightly pitch-dropping tone for the body of the knock,
    a quieter inharmonic overtone, and a click of filtered noise for the strike itself.
    Beats are scheduled ahead on the audio clock, not by timers, so the tempo stays even. */
-var WALK_MIN = 50, WALK_MAX = 130, metro = { next:0, beat:0, timer:null, noise:null };
+var WALK_MIN = 20, WALK_MAX = 130, metro = { next:0, beat:0, timer:null, noise:null };
 function walkMetronome(p){
   return '<section class="card"><div class="item-head"><h2>Walking beat</h2><span class="tag">Optional</span></div>' +
     '<p class="hint">A steady tick and tock to step to. Let your feet land on the beat and keep your eyes ahead. Headphones are not needed.</p>' +
@@ -1862,6 +2233,8 @@ function viewExport(){
     '</div></div>' +
     (reflectionCount() ? '<div class="field"><span class="lbl">Your Learn reflections</span><label class="check-row"><input type="checkbox" data-exp-reflect="1"' + (e.reflect ? ' checked' : '') + '> Include my written reflections in this report</label>' +
       '<p class="hint">Off by default. Your reflections are private unless you tick this. You have answered ' + reflectionCount() + ' reflection question' + (reflectionCount() === 1 ? '' : 's') + '.</p></div>' : '') +
+    (state.moments.length ? '<div class="field"><span class="lbl">Your unpacked moments</span><label class="check-row"><input type="checkbox" data-exp-moments="1"' + (e.moments ? ' checked' : '') + '> Include my unpacked moments in this report</label>' +
+      '<p class="hint">Off by default. These can mention the people in your life, so they stay private unless you tick this.</p></div>' : '') +
     '<button type="button" class="btn btn-primary btn-wide" data-action="exp-share" ' + (e.busy || !(e.pdf || e.csv || e.backup) ? 'disabled' : '') + '>' + (e.busy ? 'Preparing…' : 'Share') + '</button>';
   if (e.links) {
     h += '<p class="hint">Sharing is not available in this browser, so here are the files to save instead.</p><div class="row">' + e.links.map(function(l){
@@ -1869,7 +2242,7 @@ function viewExport(){
     }).join('') + '</div>';
   }
   h += '</section>';
-  h += '<section class="card"><h2>What is in the report</h2><ul class="prose" style="padding-left:22px"><li>Summary: episodes, average severity, common triggers and warning signs, what helped</li><li>Symptom log, one entry per episode</li><li>Grounding activity record with stress before and after</li><li>Weekly summaries and daily mood and energy check-ins</li><li>Thought records</li><li>Your Learn reflections, only if you tick the box above</li><li>Pacing goals and activity minutes</li><li>Course homework answers</li></ul>' +
+  h += '<section class="card"><h2>What is in the report</h2><ul class="prose" style="padding-left:22px"><li>Summary: episodes, average severity, common triggers and warning signs, what helped</li><li>Symptom log, one entry per episode</li><li>Grounding activity record with stress before and after</li><li>Weekly summaries and daily mood and energy check-ins</li><li>Thought records</li><li>Your Learn reflections, only if you tick the box above</li><li>Your unpacked moments, only if you tick the box above</li><li>Pacing goals and activity minutes</li><li>Course homework answers</li></ul>' +
        '<p class="hint">The report carries no name. Add your name in the message when you send it, or your clinic may ask you to.</p></section>';
   return h + '</div>';
 }
@@ -1906,6 +2279,10 @@ function buildCSVs(days){
   out.push({ name:'pattern-checks.csv', text: csv([['date_time','patterns']].concat(pt.map(function(x){ return [fmtISO(x.ts), x.items]; }))) });
   var act = state.activity.filter(function(a){ return inRange(a.ts, days); });
   out.push({ name:'activity.csv', text: csv([['date_time','kind','label','minutes']].concat(act.map(function(a){ return [fmtISO(a.ts), a.kind, a.label, a.minutes]; }))) });
+  if (ui.exp.moments) {
+    var mo = state.moments.filter(function(m){ return inRange(m.ts, days); });
+    out.push({ name:'moments-log.csv', text: csv([['date_time','what_happened','who','body_noticed','on_the_surface','underneath','what_i_needed','what_i_did','summary']].concat(mo.map(function(m){ return [fmtISO(m.ts), m.what, m.who === 'Other' && m.whoOther ? m.whoOther : m.who, m.body, m.surface, m.under, m.need, (m.did || []).map(function(x){ return x === 'Other' && m.didOther ? m.didOther : x; }), momentSummary(m)]; }))) });
+  }
   if (ui.exp.reflect) {
     var rows = [['topic','question','answer']];
     learnTopics().forEach(function(t){ t.reflect.forEach(function(r){ var v = state.learn.answers[r.id]; if (v && String(v).trim()) rows.push([t.title, r.q, v]); }); });
@@ -1996,6 +2373,12 @@ function buildPDF(days){
   var th = state.thoughts.filter(function(t){ return inRange(t.ts, days); });
   if (th.length) { h2('Thought records'); th.slice().sort(function(a,b){ return a.ts - b.ts; }).forEach(function(t){ h3(fmtWhen(t.ts)); kv('Situation', t.situation); kv('Thought', t.thought); kv('Feelings', t.emotions); kv('Feeling strength before', t.before + '%'); kv('Thinking traps', t.traps); kv('Supports the thought', t.evFor); kv('Does not fit', t.evAgainst); kv('Fairer thought', t.balanced); kv('Feeling strength after', t.after + '%'); }); }
 
+  var mo = ui.exp.moments ? state.moments.filter(function(m){ return inRange(m.ts, days); }) : [];
+  if (mo.length) {
+    h2('Unpacked moments');
+    p('Shared at the patient\'s choice.', 9.5, 'italic');
+    mo.slice().sort(function(a,b){ return a.ts - b.ts; }).forEach(function(m){ h3(fmtWhen(m.ts) + (m.what ? ' — ' + m.what : '')); p(momentSummary(m)); });
+  }
   if (ui.exp.reflect && reflectionCount()) {
     h2('Learn reflections');
     p('Shared at the patient\'s choice.', 9.5, 'italic');
@@ -2050,6 +2433,7 @@ function importBackup(file){
       mergeList(state.thoughts, d.thoughts); state.thoughts.sort(function(a,b){ return b.ts - a.ts; });
       mergeList(state.goals, d.goals); mergeList(state.activity, d.activity);
       mergeList(state.feelings, d.feelings); state.feelings.sort(function(a,b){ return b.ts - a.ts; });
+      mergeList(state.moments, d.moments || []); state.moments.sort(function(a,b){ return b.ts - a.ts; });
       mergeList(state.fgoals, d.fgoals || []); mergeList(state.patterns, d.patterns || []);
       for (k in d.wins) if (!state.wins[k]) { state.wins[k] = d.wins[k]; added++; }
       for (k in d.profile) if (!state.profile[k] && d.profile[k]) state.profile[k] = d.profile[k];
@@ -2113,6 +2497,7 @@ function render(){
   if (ui.tab === 'tools' && p && p.before !== undefined) {
     if (p.type === 'breath' && p.running) startBreathLoop();
     if (p.type === 'bls' && p.running) startBlsLoop();
+    if (p.type === 'shift' && p.running) startShiftLoop();
     if (p.type === 'move' && p.exRunning) startExLoop();
   }
 }
@@ -2124,7 +2509,7 @@ function openTool(type){
   else if (type === 'ground') ui.panel = {type:'ground', step:0};
   else if (type === 'pmr') ui.panel = {type:'pmr', step:0};
   else if (type === 'scan') { ui.sub.tools = 'feel'; ui.panel = {type:'scan', step:0}; }
-  else if (type === 'shift') ui.panel = {type:'shift', i: Math.floor(Math.random() * SHIFTS.length), done:false};
+  else if (type === 'shift') ui.panel = {type:'shift', running:false, done:false, sound:true};
   else if (type === 'bls') ui.panel = {type:'bls', mode:null, secs:60, speed:'slow', running:false, done:false};
   render();
 }
@@ -2136,6 +2521,7 @@ function draftFor(name){
   if (name === 'gr') return ui.draftGr;
   if (name === 'goal') return ui.draftGoal;
   if (name === 'feel') return ui.draftFeel;
+  if (name === 'moment') return ui.draftMoment;
   if (name === 'setup') return ui.draftSetup;
   if (name === 'fgoal') return ui.draftFgoal;
   if (name === 'attempt') return ui.draftAttempt;
@@ -2339,6 +2725,37 @@ var A = {
   },
   'scan-prev': function(){ ui.panel.step = Math.max(0, ui.panel.step - 1); render(); },
   'feel-new': function(){ ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.lesson = null; ui.learnTopic = null; ui.draftFeel = newFeel(); ui.feelStep = 1; ui.panel = {type:'feel', before:-1, done:false}; ui.scrollTop = true; render(); },
+  'moment-new': function(){ ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.lesson = null; ui.learnTopic = null; ui.draftMoment = newMoment(); ui.momentStep = 1; ui.panel = {type:'moment', before:-1, done:false}; ui.scrollTop = true; render(); },
+  'moment-cancel': function(){ ui.draftMoment = null; ui.panel = null; ui.scrollTop = true; render(); },
+  'moment-next': function(){ ui.momentStep = Math.min(MOMENT_STEPS, (ui.momentStep || 1) + 1); ui.scrollTop = true; render(); },
+  'moment-back': function(){ ui.momentStep = Math.max(1, (ui.momentStep || 1) - 1); ui.scrollTop = true; render(); },
+  'moment-chip': function(el){
+    var d = ui.draftMoment; if (!d) return;
+    var f = el.getAttribute('data-field'), v = el.getAttribute('data-val'), cur = (d[f] || []).slice(), i = cur.indexOf(v), lim = MOMENT_LIMIT[f] || 2;
+    if (i > -1) cur.splice(i, 1);
+    else if (MOMENT_ALONE.indexOf(v) > -1) cur = [v];
+    else {
+      cur = cur.filter(function(x){ return MOMENT_ALONE.indexOf(x) < 0; });
+      if (cur.length >= lim) { toast('Up to ' + lim + '. Tap one to change it.'); return; }
+      cur.push(v);
+    }
+    d[f] = cur; saveUiSoon();
+    ui.refocus = '[data-action="moment-chip"][data-field="' + f + '"][data-val="' + v.replace(/"/g, '\\"') + '"]'; render();
+  },
+  'moment-save': function(){
+    var d = ui.draftMoment; if (!d) return;
+    var m = { id: uid(), ts: Date.now(), what: (d.what || '').trim(), who: d.who, whoOther: (d.whoOther || '').trim(), body: d.body.slice(), surface: d.surface.slice(), under: d.under.slice(), need: d.need, did: d.did.slice(), didOther: (d.didOther || '').trim() };
+    if (m.who !== 'Other') m.whoOther = '';
+    if (m.did.indexOf('Other') < 0) m.didOther = '';
+    state.moments.unshift(m); ui.draftMoment = null; ui.momentStep = 1;
+    save(); ui.panel.done = true; ui.panel.savedId = m.id; fxTick('Moment saved'); ui.scrollTop = true; render();
+  },
+  'moment-del': function(el){
+    var id = el.getAttribute('data-id');
+    if (ui.confirmDel === 'moment:' + id) { state.moments = state.moments.filter(function(m){ return m.id !== id; }); ui.confirmDel = null; save(); toast('Deleted'); }
+    else ui.confirmDel = 'moment:' + id;
+    render();
+  },
   'feel-cancel': function(){ ui.draftFeel = null; ui.panel = null; ui.scrollTop = true; render(); },
   'feel-family': function(el){ ui.draftFeel.family = el.getAttribute('data-id'); ui.draftFeel.word = ''; ui.draftFeel.urges = []; ui.draftFeel.action = ''; ui.refocus = '[data-action="feel-family"][data-id="' + ui.draftFeel.family + '"]'; render(); },
   'feel-next': function(){ if (ui.feelStep === 1 && !ui.draftFeel.family) return; ui.feelStep = Math.min(5, ui.feelStep + 1); ui.scrollTop = true; render(); },
@@ -2393,8 +2810,20 @@ var A = {
   },
   'bls-stop': function(){ finishBls(false); },
   'bls-again': function(){ ui.panel = {type:'bls', mode:ui.panel.mode, secs:ui.panel.secs, speed:ui.panel.speed, running:false, done:false, before:ui.panel.before}; render(); },
-  'shift-next': function(){ var n; do { n = Math.floor(Math.random() * SHIFTS.length); } while (n === ui.panel.i && SHIFTS.length > 1); ui.panel.i = n; render(); },
-  'shift-done': function(){ var p = ui.panel; p.done = true; p.after = -1; p.minutesDone = 1; if (p.before < 0) saveGrounding(p, 1); render(); },
+  'shift-start': function(){
+    var p = ui.panel; p.running = true; p.done = false; p.t0 = Date.now(); p.turn = 0;
+    bird.x = 0; bird.face = 1;
+    if (p.sound && !startNature(true)) { p.sound = false; toast('Sound is not available on this phone. You can still do the practice.'); }
+    ui.scrollTop = true; render();
+  },
+  'shift-sound': function(){
+    var p = ui.panel; p.sound = !p.sound;
+    if (p.sound) { if (natureRunning()) natureVolume(true); else if (!startNature(true)) { p.sound = false; toast('Sound is not available on this phone.'); } }
+    else natureVolume(false);
+    render();
+  },
+  'shift-stop': function(){ finishShift(false); },
+  'shift-again': function(){ ui.panel = {type:'shift', running:false, done:false, sound:true}; ui.scrollTop = true; render(); },
   'metro-toggle': function(){
     var p = ui.panel;
     if (p.metro) { p.metro = false; stopMetro(); render(); return; }
@@ -2517,6 +2946,7 @@ document.addEventListener('input', function(e){
 document.addEventListener('change', function(e){
   if (e.target && e.target.id === 'importFile' && e.target.files && e.target.files[0]) importBackup(e.target.files[0]);
   if (e.target && e.target.getAttribute && e.target.getAttribute('data-exp-reflect')) { ui.exp.reflect = !!e.target.checked; }
+  if (e.target && e.target.getAttribute && e.target.getAttribute('data-exp-moments')) { ui.exp.moments = !!e.target.checked; }
   if (e.target && e.target.getAttribute && e.target.getAttribute('data-voice-pick')) {
     state.prefs.voice = e.target.value; voiceCache = null; save(); testVoice();
   }
@@ -2524,7 +2954,7 @@ document.addEventListener('change', function(e){
 document.addEventListener('keydown', function(e){
   if (e.key === 'Enter' && e.target && e.target.id === 'planText') { e.preventDefault(); A['plan-add'](); }
 });
-window.addEventListener('pagehide', function(){ clearTimeout(saveTimer); save(); clearTimeout(uiTimer); saveUi(); stopReading(); stopMetro(); stopTone(); });
+window.addEventListener('pagehide', function(){ clearTimeout(saveTimer); save(); clearTimeout(uiTimer); saveUi(); stopReading(); stopMetro(); stopNature(); stopTone(); });
 
 (function visit(){
   var now = Date.now();

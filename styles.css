@@ -322,3 +322,58 @@ html.calm-ui .orb-glow{display:none}
 .bpm-step{min-width:48px; font-size:22px; padding:0}
 .bls-ears{justify-content:space-between; margin:6px 2px 0}
 .tag{display:inline-block; font-size:14px; font-weight:600; padding:3px 10px; border-radius:999px; background:var(--sage-soft); color:var(--fg)}
+
+/* ---------- grounding art: the hand ---------- */
+.art .hand{fill:none; stroke:var(--accent); stroke-width:10.5; stroke-linecap:round}
+.art .hand .thumb{stroke-width:11.5}
+.art .ln.thin{stroke-width:3}
+
+/* ---------- shifting attention: the songbird scene ---------- */
+/* The scene has its own colours so the bird looks like a real bird in both themes;
+   only the sky and hills dim in dark mode. */
+.bird-scene{display:block; width:100%; max-width:460px; height:auto; margin:10px auto 4px; border-radius:22px;
+  --sky1:#DCEBF2; --sky2:#F2F0E4; --hill:#C9DCCB; --cloud:#FFFFFF; --leaf:#5E8F6E; --leaf2:#86AE8F; --branch:#7A5A44}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]) .bird-scene{--sky1:#22323A; --sky2:#2C3A33; --hill:#33493F; --cloud:#3C4C52; --leaf:#5F8B6C; --leaf2:#4C7259; --branch:#8A6A52} }
+:root[data-theme="dark"] .bird-scene{--sky1:#22323A; --sky2:#2C3A33; --hill:#33493F; --cloud:#3C4C52; --leaf:#5F8B6C; --leaf2:#4C7259; --branch:#8A6A52}
+.bird-scene .sky1{stop-color:var(--sky1)} .bird-scene .sky2{stop-color:var(--sky2)}
+.bird-scene .hill{fill:var(--hill)}
+.bird-scene .cloud{fill:var(--cloud); opacity:.85}
+.bird-scene .branch{fill:none; stroke:var(--branch); stroke-width:7; stroke-linecap:round}
+.bird-scene .twig{fill:none; stroke:var(--branch); stroke-width:3.5; stroke-linecap:round}
+.bird-scene .leafy ellipse{fill:var(--leaf)}
+.bird-scene #leavesBack ellipse{fill:var(--leaf2)}
+.bird-scene .b-back{fill:#5D6B72}
+.bird-scene .b-dark{fill:#3B464C}
+.bird-scene .b-breast{fill:#D9824F}
+.bird-scene .b-belly{fill:#F3E9DA}
+.bird-scene .b-bar{fill:none; stroke:#F3EFE6; stroke-width:2.2; stroke-linecap:round}
+.bird-scene .b-ring{fill:#F3EFE6}
+.bird-scene .b-eye{fill:#1E2326}
+.bird-scene .b-shine{fill:#FFFFFF}
+.bird-scene .b-lid{fill:#5D6B72}
+.bird-scene .b-beak{fill:#E2B04A}
+.bird-scene .b-beak-lo{fill:#C99536}
+.bird-scene .b-legs{fill:none; stroke:#8A6A52; stroke-width:2.6; stroke-linecap:round}
+.bird-scene .note{fill:none; stroke:var(--terra); stroke-width:2; stroke-linecap:round}
+.bird-scene #birdBody{animation:birdBreathe 2.6s ease-in-out infinite}
+.bird-scene #leavesA{animation:leafSway 4.2s ease-in-out infinite}
+.bird-scene #leavesB{animation:leafSway 5.1s ease-in-out infinite reverse}
+.bird-scene #cloud1{animation:cloudDrift 60s linear infinite alternate}
+.bird-scene #cloud2{animation:cloudDrift 80s linear infinite alternate-reverse}
+@keyframes birdBreathe{0%,100%{transform:scale(1)}50%{transform:scale(1.018)}}
+@keyframes leafSway{0%,100%{transform:rotate(-5deg)}50%{transform:rotate(6deg)}}
+@keyframes cloudDrift{from{transform:translateX(-20px)}to{transform:translateX(40px)}}
+.shift-steps{display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-top:4px}
+.shift-step{text-align:center; font-size:14px; font-weight:600; padding:6px 4px; border-radius:999px; background:var(--surface-2); color:var(--muted)}
+.shift-step.done{background:var(--sage-soft); color:var(--fg)}
+.shift-step.on{background:var(--accent); color:var(--accent-fg)}
+.shift-prompt{min-height:150px}
+.shift-prompt .bigtext{margin:4px 0 6px}
+.shift-kind{margin:0; font-size:14px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--terra)}
+.shift-card[data-kind="listen"] .bird-scene{opacity:.55; transition:opacity 1.2s ease}
+.shift-card[data-kind="look"] .bird-scene{opacity:1; transition:opacity 1.2s ease}
+
+/* ---------- unpack a moment ---------- */
+.moment-card{background:var(--sage-soft); border:1.5px solid var(--sage); border-radius:16px; padding:14px 16px; font-size:18px; line-height:1.5}
+.moment-card p{margin:0}
+.moment-card .moment-what{font-size:15px; color:var(--muted); margin-bottom:6px}
