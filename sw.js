@@ -1,8 +1,8 @@
 /* Steady Ground service worker: caches the app so it opens offline.
    Bump CACHE when you change any file, so installed phones pick up the update. */
-var CACHE = 'steady-ground-v13';
+var CACHE = 'steady-ground-v14';
 var FILES = [
-  './', './index.html', './styles.css', './app.js', './learn.js', './jspdf.umd.min.js',
+  './', './index.html', './styles.css', './app.js', './gate.js', './learn.js', './jspdf.umd.min.js',
   './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-512-maskable.png', './icons/apple-touch-icon.png'
 ];

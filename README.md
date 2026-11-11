@@ -9,6 +9,7 @@ Steady Ground is a progressive web app (PWA). Patients open one web address on t
 | `index.html` | The app page |
 | `styles.css` | Styling |
 | `app.js` | The app itself: tracking, tools, Learn, export |
+| `gate.js` | The access code screen, and the code itself |
 | `learn.js` | The four Learn topics: reading, reflection questions and sources |
 | `jspdf.umd.min.js` | PDF library (kept locally so export works offline) |
 | `manifest.webmanifest` | Tells phones the name, icon and colours of the app |
@@ -30,7 +31,7 @@ That address is what you give patients. Nobody can see patient data through it; 
 
 ### Updating the app later
 
-Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v13` to `steady-ground-v14` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v14` to `steady-ground-v15` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
 
 ## Engagement features (version 3)
 
@@ -131,6 +132,14 @@ versions 9 and 10 kept appearing as the old app.
 - **A worker taking over mid-session reloads the page once**, so the patient is not left
   looking at files the previous version put there. It will not reload during a running
   exercise.
+
+## Version 14: access code
+
+- **The app now asks for an access code** before anything else is shown. The code is entered once per phone; after that the phone stays unlocked, including after updates. Patients who already use the app are asked once and keep all their entries.
+- **The code is `2468`.** To change it, open `gate.js`, edit the line `var ACCESS_CODE = '2468';`, commit, and bump the cache number in `sw.js`. Every phone is then asked for the new code once.
+- After 5 wrong tries the screen waits 30 seconds before allowing more.
+- The access screen shows the 9-8-8 crisis line, so it is reachable without the code.
+- **What it is and isn't:** it keeps casual visitors out of the app. It is not encryption. The code can be read in `gate.js` by anyone who looks at the site's files, and entries on the phone are stored exactly as before.
 
 ## Version 13: shifting attention with a songbird, unpack a moment, slower walking beat
 
