@@ -14,6 +14,9 @@ function blank(){
            fgoals:[], wins:{}, patterns:[] };
 }
 var state = blank();
+/* v15 reworded some difficulty options as barriers; carry old saved answers over to the new wording. */
+var DIFF_RENAMES = { 'Sleep':'Poor sleep', 'Relationships':'Strain in relationships', 'Confidence':'Low confidence', 'Work or study':'Demands of work or study' };
+function renameDiffs(a){ if (!Array.isArray(a)) return a; var out = []; a.forEach(function(v){ v = DIFF_RENAMES[v] || v; if (out.indexOf(v) < 0) out.push(v); }); return out; }
 function mergeInto(p){
   var b = blank();
   for (var k in b) {
@@ -22,6 +25,7 @@ function mergeInto(p){
       else b[k] = p[k];
     }
   }
+  b.profile.difficulties = renameDiffs(b.profile.difficulties);
   return b;
 }
 (function load(){
@@ -51,6 +55,7 @@ function restoreUi(){
     var raw = localStorage.getItem(UI_KEY); if (!raw) return;
     var o = JSON.parse(raw), keys = state.setup.done ? UI_KEEP : ['setupStep','welcomeMode','draftSetup'];
     keys.forEach(function(k){ if (o[k] !== undefined && o[k] !== null) { if (k === 'sub') { for (var kk in o.sub) ui.sub[kk] = o.sub[kk]; } else ui[k] = o[k]; } });
+    if (ui.draftSetup) ui.draftSetup.difficulties = renameDiffs(ui.draftSetup.difficulties) || [];
     if (ui.draftFeel) { ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.panel = {type:'feel', before:-1, done:false}; }
     else if (ui.draftMoment) { ui.tab = 'tools'; ui.sub.tools = 'feel'; ui.panel = {type:'moment', before:-1, done:false}; }
     if (ui.sub.path === 'course') ui.sub.path = 'learn';
@@ -548,7 +553,7 @@ function viewWelcome(){
   return h + '</div>';
 }
 var PRESENTATIONS = [['seizure','Seizure-like episodes'],['movement','Weakness, tremor or walking'],['sensory','Numbness, pain or tingling'],['speech','Speech or swallowing'],['cognitive','Brain fog or memory'],['fatigue','Fatigue'],['dizzy','Dizziness'],['unsure','Not sure or mixed']];
-var DIFFICULTIES = ['Avoiding places or activities','Boom and bust','Checking my symptoms','Worry and dread','Low mood','Sleep','Relationships','Confidence','Work or study'];
+var DIFFICULTIES = ['Avoiding places or activities','Boom and bust','Checking my symptoms','Worry and dread','Low mood','Poor sleep','Strain in relationships','Low confidence','Demands of work or study'];
 function presKeys(){ var names = state.profile.presentation || []; return PRESENTATIONS.filter(function(p){ return names.indexOf(p[1]) > -1; }).map(function(p){ return p[0]; }); }
 function goalIdeas(presNames){
   var names = presNames || state.profile.presentation || [], keys = PRESENTATIONS.filter(function(p){ return names.indexOf(p[1]) > -1; }).map(function(p){ return p[0]; });
