@@ -31,7 +31,7 @@ That address is what you give patients. Nobody can see patient data through it; 
 
 ### Updating the app later
 
-Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v14` to `steady-ground-v15` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
+Upload the changed files again (same names) and commit. Then open `sw.js` and change `steady-ground-v15` to `steady-ground-v16` (and so on each time). That makes phones that already installed the app fetch the new version the next time it is opened with a connection.
 
 ## Engagement features (version 3)
 
