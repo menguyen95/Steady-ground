@@ -443,7 +443,7 @@ function viewMe(){
   h += '<section class="card"><div class="item-head"><h2>My milestones</h2><button type="button" class="link" data-action="goto-milestones">See all ' + earned.length + '/' + BADGES.length + '</button></div>' +
        (recent.length ? '<div class="badges">' + recent.map(function(b){ return '<div class="badge-tile on"><div class="medal medal-' + b.cat + '">' + badgeIcon(b.cat) + '</div><div class="badge-body"><strong>' + esc(b.name) + '</strong><span class="meta">Reached ' + esc(fmtDay(dayKey(state.badges[b.id]))) + '</span></div></div>'; }).join('') + '</div>' : '<p class="hint">Your first milestone is one calming practice away.</p>') +
        '<div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<p style="flex:1; min-width:160px">' + s.last7 + ' of the last 7 days with a practice, ' + s.practiceDays + ' practice days in all.</p></div></section>';
-  h += '<section class="card"><h2>My FND</h2><p class="hint">Used to choose which tools come first when you tap "I\'m having symptoms".</p><div class="field"><span class="lbl">How it shows up</span>' + chipGroup('profile','presentation',PRESENTATIONS.map(function(x){ return x[1]; }),pr.presentation) + '</div><div class="field"><span class="lbl">What gets in the way most</span>' + chipGroup('profile','difficulties',DIFFICULTIES,pr.difficulties) + '</div>' + textField('profile','matters','If symptoms got in the way less, I would be',pr.matters,2,'') + '</section>';
+  h += '<section class="card"><h2>My FND</h2><p class="hint">Used to choose which tools come first when you tap "I\'m having symptoms".</p><div class="field"><span class="lbl">How it shows up</span>' + chipGroup('profile','presentation',PRESENTATIONS.map(function(x){ return x[1]; }),pr.presentation) + '</div><div class="field"><span class="lbl">What makes it harder to do the things I want to do</span><p class="hint">"Boom and bust" means doing a lot on a good day, then needing days to recover.</p>' + chipGroup('profile','difficulties',DIFFICULTIES,pr.difficulties) + '</div>' + textField('profile','matters','One thing I\'d like to do or get back to doing',pr.matters,2,'') + '</section>';
   h += '<section class="card"><h2>The version of me I am working toward</h2><p class="hint">From Session 1, Day 2. Read it on a hard day.</p>' + textField('profile','vision','',vision,3,'Someone who has FND but it does not run my life') + '</section>';
   h += '<section class="card"><h2>About me</h2><p class="hint">Anything you want the app, or a clinician reading your report, to know: what your symptoms look like, what helps, what you enjoy.</p>' + textField('profile','about','',pr.about,4,'') + '</section>';
   h += '<section class="card"><h2>My care team</h2><p class="hint">Names and numbers. Also used by your flare plan.</p>' + textField('profile','team','',pr.team || state.flare.contacts,3,'Dr, therapist, physiotherapist, a friend') + '</section>';
@@ -536,8 +536,8 @@ function viewWelcome(){
     h += '<h1>How does your FND show up?</h1><p class="hint">Pick everything that applies. The app uses this to choose which tools to offer first. You can change it later under Me.</p>' + chipGroup('setup','presentation',PRESENTATIONS.map(function(p){ return p[1]; }),d.presentation) +
          '<div class="row"><button type="button" class="btn btn-quiet" data-action="setup-back">Back</button><button type="button" class="btn btn-primary" data-action="setup-next">Next</button></div>';
   } else if (st === 2) {
-    h += '<h1>What gets in the way most?</h1>' + chipGroup('setup','difficulties',DIFFICULTIES,d.difficulties) +
-         textField('setup','matters','If symptoms got in the way less, what would you be doing?',d.matters,3,'For example: walking to the shops on my own, seeing friends, going back to work two days a week') +
+    h += '<h1>What makes it harder to do the things you want to do?</h1><p class="hint">Pick any that apply. "Boom and bust" means doing a lot on a good day, then needing days to recover.</p>' + chipGroup('setup','difficulties',DIFFICULTIES,d.difficulties) +
+         textField('setup','matters','What\'s one thing you\'d like to do or get back to doing?',d.matters,3,'For example: walking to the shops on my own, seeing friends, going back to work two days a week') +
          '<div class="row"><button type="button" class="btn btn-quiet" data-action="setup-back">Back</button><button type="button" class="btn btn-primary" data-action="setup-next">Next</button></div>';
   } else {
     h += '<h1>One real-world goal to start</h1><p class="hint">Something you have been avoiding or want back, small enough to try this week. The app will help you break it into steps. Optional; you can add goals any time.</p>' +
@@ -1537,7 +1537,7 @@ function panelFeel(p){
   }
   h += '<section class="card"><div class="item-head"><h2>Name the feeling</h2><span class="val">Step ' + s + ' of 5</span></div><div class="bar" aria-hidden="true"><span style="width:' + (s * 20) + '%"></span></div>';
   if (s === 1) {
-    h += '<p class="lbl">What is the closest family?</p><div class="feel-grid">' + FAMILIES.map(function(f){ return '<button type="button" class="feel-btn" aria-pressed="' + (d.family === f.id) + '" data-action="feel-family" data-id="' + f.id + '">' + esc(f.name) + '<small>' + esc(f.words.slice(0,3).join(', ').toLowerCase()) + '</small></button>'; }).join('') + '</div>';
+    h += '<p class="lbl">Which option is closest to how you feel right now?</p><div class="feel-grid">' + FAMILIES.map(function(f){ return '<button type="button" class="feel-btn" aria-pressed="' + (d.family === f.id) + '" data-action="feel-family" data-id="' + f.id + '">' + esc(f.name) + '<small>' + esc(f.words.slice(0,3).join(', ').toLowerCase()) + '</small></button>'; }).join('') + '</div>';
   } else if (s === 2) {
     h += '<p class="lbl">Closer to which word?</p>' + radioGroup('feel','word',fam.words,d.word) + '<input type="text" id="f-wordOther" value="' + esc(fam.words.indexOf(d.word) > -1 ? '' : d.word) + '" placeholder="Or your own word" data-draft="feel" data-field="word" aria-label="Your own word">' +
          '<div class="field"><div class="lbl-row"><span class="lbl">How strong is it?</span><span class="val">' + d.intensity + ' / 10</span></div>' + scaleButtons('feel','intensity',0,10,d.intensity,true) + '</div>';
@@ -2312,7 +2312,7 @@ function buildPDF(days){
   if (state.profile.about) { h2('About me, in my words'); p(state.profile.about); }
 
   var pr0 = state.profile;
-  if (pr0.presentation && pr0.presentation.length || pr0.matters) { h2('How my FND shows up'); kv('Presentation', pr0.presentation); kv('Gets in the way most', pr0.difficulties); kv('If symptoms got in the way less, I would be', pr0.matters); }
+  if (pr0.presentation && pr0.presentation.length || pr0.matters) { h2('How my FND shows up'); kv('Presentation', pr0.presentation); kv('What makes things harder', pr0.difficulties); kv('One thing I would like to do or get back to doing', pr0.matters); }
   var at = allAttempts().filter(function(x){ return inRange(x.ts, days); });
   h2('Real-world goals');
   if (!state.fgoals.length) p('No goals set yet.');
