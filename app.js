@@ -165,10 +165,10 @@ var EXERCISES = [
   {id:'sit', name:'Sit to stand', mins:3, dose:'5 to 8 times, resting as needed', standing:true,
    steps:['Sit on a sturdy chair placed against a wall, feet hip-width apart.','Lean slightly forward and stand up. Pause for a moment.','Sit back down slowly and with control.'],
    tip:'Look straight ahead at a fixed point. Keep your breathing easy.'},
-  {id:'shift', name:'Weight shifting', mins:2, dose:'1 to 2 minutes', standing:true,
+  {id:'shift', name:'Weight shifting', mins:2, minMins:1, dose:'1 to 2 minutes', standing:true,
    steps:['Stand next to a counter with your feet hip-width apart and one hand resting on it.','Slowly shift your weight to the right foot, then to the left.','Keep it smooth and small. Let your knees stay soft.'],
    tip:'Fix your eyes on a point ahead of you and count the shifts out loud.'},
-  {id:'walk', name:'Rhythm walk', mins:5, dose:'2 to 5 minutes at a steady pace', standing:true,
+  {id:'walk', name:'Rhythm walk', mins:5, minMins:2, dose:'2 to 5 minutes at a steady pace', standing:true,
    steps:['Choose a clear, safe path.','Walk at an even pace and count your steps to a beat, such as 1-2-3-4.','Look ahead at a point in the distance, not down at your feet.'],
    tip:'Let your legs do the work on their own. Notice the scenery instead of your steps.'}
 ];
@@ -443,18 +443,18 @@ function viewMe(){
   h += '<section class="card"><div class="item-head"><h2>My milestones</h2><button type="button" class="link" data-action="goto-milestones">See all ' + earned.length + '/' + BADGES.length + '</button></div>' +
        (recent.length ? '<div class="badges">' + recent.map(function(b){ return '<div class="badge-tile on"><div class="medal medal-' + b.cat + '">' + badgeIcon(b.cat) + '</div><div class="badge-body"><strong>' + esc(b.name) + '</strong><span class="meta">Reached ' + esc(fmtDay(dayKey(state.badges[b.id]))) + '</span></div></div>'; }).join('') + '</div>' : '<p class="hint">Your first milestone is one calming practice away.</p>') +
        '<div class="row" style="align-items:center">' + ring(s.last7 / 7, s.last7 + '/7', 'days') + '<p style="flex:1; min-width:160px">' + s.last7 + ' of the last 7 days with a practice, ' + s.practiceDays + ' practice days in all.</p></div></section>';
-  h += '<section class="card"><h2>My FND</h2><p class="hint">Used to choose which tools come first when you tap "I\'m having symptoms".</p><div class="field"><span class="lbl">How it shows up</span>' + chipGroup('profile','presentation',PRESENTATIONS.map(function(x){ return x[1]; }),pr.presentation) + '</div><div class="field"><span class="lbl">What gets in the way most</span>' + chipGroup('profile','difficulties',DIFFICULTIES,pr.difficulties) + '</div>' + textField('profile','matters','If symptoms got in the way less, I would be',pr.matters,2,'') + '</section>';
+  h += '<section class="card"><h2>My FND</h2><p class="hint">Used to choose which tools come first when you tap "I need help right now".</p><div class="field"><span class="lbl">How it shows up</span>' + chipGroup('profile','presentation',PRESENTATIONS.map(function(x){ return x[1]; }),pr.presentation) + '</div><div class="field"><span class="lbl">What gets in the way most</span>' + chipGroup('profile','difficulties',DIFFICULTIES,pr.difficulties) + '</div>' + textField('profile','matters','If symptoms got in the way less, I would be',pr.matters,2,'') + '</section>';
   h += '<section class="card"><h2>The version of me I am working toward</h2><p class="hint">From Session 1, Day 2. Read it on a hard day.</p>' + textField('profile','vision','',vision,3,'Someone who has FND but it does not run my life') + '</section>';
   h += '<section class="card"><h2>About me</h2><p class="hint">Anything you want the app, or a clinician reading your report, to know: what your symptoms look like, what helps, what you enjoy.</p>' + textField('profile','about','',pr.about,4,'') + '</section>';
   h += '<section class="card"><h2>My care team</h2><p class="hint">Names and numbers. Also used by your flare plan.</p>' + textField('profile','team','',pr.team || state.flare.contacts,3,'Dr, therapist, physiotherapist, a friend') + '</section>';
-  h += '<section class="card"><h2>My plans</h2><div class="row"><button type="button" class="btn" data-action="goto-plan-pacing">Pacing goals</button><button type="button" class="btn" data-action="goto-plan-flare">Flare plan</button><button type="button" class="btn" data-action="goto-plan">Today\'s plan</button></div></section>';
+  h += '<section class="card"><h2>My plans</h2><div class="row"><button type="button" class="btn" data-action="goto-plan-pacing">Pacing goals</button><button type="button" class="btn" data-action="goto-plan-flare">Flare plan</button><button type="button" class="btn" data-action="goto-track" data-sub="episodes">Symptom log</button><button type="button" class="btn" data-action="goto-plan">Today\'s plan</button></div></section>';
   h += '<section class="card"><h2>Your data and privacy</h2><p><strong>What is saved:</strong> everything you enter, on this phone only.</p><p><strong>What is shared:</strong> nothing, until you tap Share with my clinic and choose where it goes.</p><p><strong>Monitoring:</strong> none. No one at the clinic can see what you enter, and the app cannot call anyone for you. In an emergency, call 911 or your local emergency number.</p><div class="row"><button type="button" class="btn btn-primary" data-action="goto-export">Share with my clinic</button><button type="button" class="btn" data-action="goto-settings">Appearance, voice, reminders, backup</button></div></section>';
   return h + '</div>';
 }
 
 /* ---------- ui state ---------- */
 var ui = {
-  tab:'today', sub:{track:'episodes', tools:'calm', plan:'pacing', export:'pdf', progress:'trends'}, draftFeel:null, feelStep:1, draftMoment:null, momentStep:1,
+  tab:'today', sub:{track:'episodes', tools:'calm', plan:'pacing', export:'pdf', progress:'trends', symptoms:'log'}, draftFeel:null, feelStep:1, draftMoment:null, momentStep:1,
   panel:null, draftEp:null, draftTh:null, thStep:1, draftGoal:null, goalForm:false, draftGr:null,
   example:false, confirmDel:null, confirmClear:false, summaryText:null,
   planKind:'activity', lesson:null, learnTopic:null, scrollTop:false, refocus:null,
@@ -721,19 +721,27 @@ function voiceCard(){
   h += '<p class="hint">Voices come from your phone, not from the app, so the choice here is whatever your phone has. If they all sound flat, your phone can download a better one for free: on iPhone, Settings, then Accessibility, then Spoken Content, then Voices. On Android, Settings, then Accessibility, then Text-to-speech.</p></section>';
   return h;
 }
+/* Rough time each tool takes, in minutes [shortest, longest], shown under every tool so patients
+   can pick by how much time they have. Anything that can be done in two minutes or less is
+   also listed on Tools > Now. */
+var TOOL_TIME = { breath:[2,5], ground:[2,3], pmr:[5,7], shift:[2,2], bls:[1,2], scan:[3,5], feel:[2,3], moment:[3,5], urges:[2,3], pattern:[1,1], pace:[1,2] };
+function exTime(x){ return [x.minMins || x.mins, x.mins]; }
+function toolTime(key){ if (key.indexOf('move:') === 0) { var x = findEx(key.slice(5)); return x ? exTime(x) : null; } return TOOL_TIME[key] || null; }
+function timeTag(t){ if (!t) return ''; return '<span class="tag tag-time">' + (t[0] === t[1] ? 'About ' + t[0] + ' min' : t[0] + '\u2013' + t[1] + ' min') + '</span>'; }
 var TOOL_LABELS = { breath:'Paced breathing', ground:'5-4-3-2-1 grounding', shift:'Shifting attention', feel:'Name the feeling', moment:'Unpack a moment', scan:'Body scan', move:'Movement', bls:'Side to side', pace:'Pacing: rest, then a small step' };
 function viewToolkit(){ return '<div class="stack">' + backBtn('goto-today', 'Back') + toolkitBody() + '</div>'; }
 function toolkitBody(){
   var kit = toolkitFor(), f = state.flare, helps = topCounts(state.episodes, 'helped', 3);
-  var h = '<div><p class="eyebrow">Help right now</p><h2 style="font-size:24px">One thing, two minutes</h2><p class="hint">Chosen for how your FND shows up. Pick whichever feels doable. You can stop at any point.</p></div>';
+  var h = '<div><p class="eyebrow">Help right now</p><h2 style="font-size:24px">Pick one thing to try</h2><p class="hint">Chosen for how your FND shows up. Pick whichever feels doable; each shows roughly how long it takes. You can stop at any point.</p></div>';
   h += '<div class="stack-s">' + kit.map(function(t){
     var label = t.type === 'move' ? (findEx(t.extra) || {}).name || 'Movement' : TOOL_LABELS[t.type];
     var action = t.type === 'feel' ? 'feel-new' : t.type === 'pace' ? 'goto-plan-pacing' : t.type === 'move' ? 'panel' : 'open-tool';
     var attrs = t.type === 'move' ? ' data-type="move" data-id="' + t.extra + '"' : t.type === 'feel' || t.type === 'pace' ? '' : ' data-type="' + t.type + '"' + (t.extra ? ' data-pace="' + t.extra + '"' : '');
-    return '<button type="button" class="tool-btn" data-action="' + action + '"' + attrs + '><span class="t">' + esc(label) + '</span><span class="meta">' + esc(t.why) + '</span></button>';
+    var tt = t.type === 'move' ? toolTime('move:' + t.extra) : TOOL_TIME[t.type];
+    return '<button type="button" class="tool-btn" data-action="' + action + '"' + attrs + '><span class="item-head"><span class="t">' + esc(label) + '</span>' + timeTag(tt) + '</span><span class="meta">' + esc(t.why) + '</span></button>';
   }).join('') + '</div>';
   if (f.helps || helps.length) h += '<section class="card card-good"><h2>What has helped you before</h2>' + (f.helps ? '<p>' + esc(f.helps) + '</p>' : '') + (helps.length ? '<p class="meta">From your log: ' + esc(joinList(helps.map(function(x){ return x[0].toLowerCase(); }))) + '.</p>' : '') + '</section>';
-  h += '<section class="card"><p class="hint">Afterwards, if you want to, note it in your symptom log. Logging is optional; the tool comes first.</p><div><button type="button" class="btn btn-quiet" data-action="goto-track" data-sub="episodes">Open symptom log</button></div></section>';
+  h += '<section class="card"><p class="hint">Afterwards, if you want to, note it in your symptom log. Logging is optional; the tool comes first.</p><div class="row"><button type="button" class="btn btn-quiet" data-action="goto-track" data-sub="episodes">Open symptom log</button><button type="button" class="btn btn-quiet" data-action="goto-plan-flare">My flare plan</button></div></section>';
   h += '<section class="card card-alert"><p class="hint">This app is not monitored and cannot call anyone for you. Call 911 for chest pain, new weakness on one side, new trouble speaking or seeing, a severe headache, an injury, or a seizure that does not stop.</p></section>';
   return h;
 }
@@ -843,12 +851,19 @@ function viewToday(){
   var chev = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6"/></svg>';
   h += '<section><p class="eyebrow">Your recovery space</p><h2 style="font-size:24px">What would help you today?</h2></section>' +
        '<div class="stack-s">' +
-       '<button type="button" class="tool-btn door" data-action="goto-toolkit"><span class="t">I need help right now<span class="meta">A strategy that fits how your FND shows up</span></span>' + chev + '</button>' +
-       '<button type="button" class="tool-btn door door-soft" data-action="quick-two"><span class="t">I have 2 minutes<span class="meta">Paced breathing, two minutes, then carry on</span></span>' + chev + '</button>' +
+       '<button type="button" class="tool-btn door" data-action="goto-toolkit"><span class="t">I need help right now<span class="meta">Tools picked for how your FND shows up</span></span>' + chev + '</button>' +
+       '<button type="button" class="tool-btn door door-soft" data-action="goto-tools-now"><span class="t">I have 2 minutes<span class="meta">Quick exercises you can finish in about two minutes</span></span>' + chev + '</button>' +
        '<button type="button" class="tool-btn door door-soft" data-action="goto-tools"><span class="t">I want to practise<span class="meta">Calming skills, feelings and gentle movement, at your own pace</span></span>' + chev + '</button>' +
        '</div>';
   var pinned = state.pins.map(function(k){ return pinInfo(k); }).filter(Boolean);
   if (pinned.length) h += '<section><p class="eyebrow">Your pinned tools</p><div class="chips">' + pinned.map(function(t){ return '<button type="button" class="chip" data-action="' + t.action + '"' + t.attrs + '>' + esc(t.label) + '</button>'; }).join('') + '</div></section>';
+  var fl = state.flare, flareMeta = fl.signs || fl.helps ? 'Ready if you need it' : 'Write it while you feel well';
+  var epsWk = state.episodes.filter(function(e){ return lastDays(7).indexOf(dayKey(e.ts)) > -1; }).length;
+  h += '<section><p class="eyebrow">Track and plan</p><div class="quick-grid">' +
+       '<button type="button" class="tool-btn" data-action="goto-track" data-sub="episodes"><span class="t">Symptom log</span><span class="meta">' + (epsWk ? epsWk + ' this week' : 'Episodes, thoughts, feelings') + '</span></button>' +
+       '<button type="button" class="tool-btn" data-action="goto-plan-flare"><span class="t">Flare plan</span><span class="meta">' + flareMeta + '</span></button>' +
+       '<button type="button" class="tool-btn" data-action="goto-learn"><span class="t">Learn</span><span class="meta">' + (lp.total ? lp.read + ' of ' + lp.total + ' read' : 'About FND') + '</span></button>' +
+       '</div></section>';
   h += '<section class="card"><div class="item-head"><h2>Reflect on my day</h2>' + (!ui.reflectOpen ? '<button type="button" class="link" data-action="reflect-open">' + (state.wins[k] ? 'Edit' : 'Open') + '</button>' : '') + '</div>' + (!ui.reflectOpen ? '<p class="hint">' + (state.wins[k] ? 'Went well: ' + esc(state.wins[k]) : 'Two taps and one thing that went well.') + '</p></section>' : '');
   if (ui.reflectOpen) {
     h += '<div class="item-head"><span></span><button type="button" class="link" data-action="reflect-close">Close</button></div>' + scale('mood', 'Mood', MOOD) + scale('energy', 'Energy', ENERGY) +
@@ -920,8 +935,8 @@ function newTh(){ return { situation:'', thought:'', emotions:[], before:60, tra
 function newGr(){ return { when: localInput(new Date()), skill:'Paced breathing', before:-1, after:-1, note:'' }; }
 var SEV = ['', 'Mild', 'Moderate', 'Severe'];
 
-function viewTrack(){
-  var h = '<div class="stack">' + '<h1>Track</h1>' + seg('track', [['episodes','Episodes'],['grounding','Grounding'],['thoughts','Thoughts'],['feelings','Feelings'],['moments','Moments']], ui.sub.track);
+function viewTrack(embedded){
+  var h = '<div class="stack">' + (embedded ? '' : '<h1>Symptom log</h1>') + seg('track', [['episodes','Episodes'],['grounding','Grounding'],['thoughts','Thoughts'],['feelings','Feelings'],['moments','Moments']], ui.sub.track);
   if (ui.sub.track === 'episodes') h += viewEpisodes();
   else if (ui.sub.track === 'grounding') h += viewGrounding();
   else if (ui.sub.track === 'thoughts') h += viewThoughts();
@@ -1178,14 +1193,26 @@ function viewTools(){
     if (p.type === 'feel') return panelFeel(p);
     if (p.type === 'moment') return panelMoment(p);
   }
-  var h = '<div class="stack"><h1>Tools</h1>' + seg('tools', [['now','Now'],['calm','Calm'],['feel','Feel'],['move','Move'],['log','Log']], ui.sub.tools);
-  function toolRow(action, attrs, key, title, meta){ return '<div class="tool-row"><button type="button" class="tool-btn" data-action="' + action + '"' + attrs + '><span class="t">' + esc(title) + '</span><span class="meta">' + esc(meta) + '</span></button><button type="button" class="pin" aria-pressed="' + (state.pins.indexOf(key) > -1) + '" aria-label="' + (state.pins.indexOf(key) > -1 ? 'Unpin from Home: ' : 'Pin to Home: ') + esc(title) + '" data-action="pin-toggle" data-key="' + key + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3zM12 15v5"/></svg></button></div>'; }
-  if (ui.sub.tools === 'now') { h += toolkitBody(); return h + '</div>'; }
-  if (ui.sub.tools === 'log') { h += '<p class="hint">Logging is here when you want it. It helps you and your clinician spot patterns; it is not something to do every hour.</p>' + viewTrack().replace('<h1>Track</h1>', ''); return h + '</div>'; }
+  var h = '<div class="stack"><h1>Tools</h1>' + seg('tools', [['now','Now'],['calm','Calm'],['feel','Feel'],['move','Move']], ui.sub.tools);
+  function toolRow(action, attrs, key, title, meta, time){ return '<div class="tool-row"><button type="button" class="tool-btn" data-action="' + action + '"' + attrs + '><span class="item-head"><span class="t">' + esc(title) + '</span>' + timeTag(time || toolTime(key)) + '</span><span class="meta">' + esc(meta) + '</span></button><button type="button" class="pin" aria-pressed="' + (state.pins.indexOf(key) > -1) + '" aria-label="' + (state.pins.indexOf(key) > -1 ? 'Unpin from Home: ' : 'Pin to Home: ') + esc(title) + '" data-action="pin-toggle" data-key="' + key + '"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4h6l-1 6 3 3v2H7v-2l3-3zM12 15v5"/></svg></button></div>'; }
+  if (ui.sub.tools === 'now') {
+    /* Everything that can be done in two minutes or less, drawn from the other sections. */
+    h += '<section class="card"><p>Short on time? Each of these takes about two minutes or less. You can stop at any point; what you did still counts.</p><div><button type="button" class="btn btn-quiet" data-action="goto-toolkit">Having symptoms? Tools picked for you</button></div></section>';
+    h += '<div class="stack-s">' +
+      toolRow('quick-two', '', 'breath', 'Paced breathing', 'A gentle pacer with a longer breath out', [2,2]) +
+      toolRow('panel', ' data-type="ground"', 'ground', '5-4-3-2-1 sensory grounding', 'Bring your attention back to the room, one sense at a time') +
+      toolRow('panel', ' data-type="shift"', 'shift', 'Shifting attention', 'A songbird and nature sounds: look, then listen') +
+      toolRow('panel', ' data-type="bls"', 'bls', 'Side to side', 'A dot to follow, or a soft chime moving ear to ear') +
+      toolRow('feel-new', '', 'feel', 'Name the feeling', 'The feeling, where it sits in your body, and what would help') +
+      toolRow('goto-pattern', '', 'pattern', 'Understand a pattern', 'A one-minute check, then one thing to try') +
+      EXERCISES.filter(function(x){ return exTime(x)[0] <= 2; }).map(function(x){ return toolRow('panel', ' data-type="move" data-id="' + x.id + '"', 'move:' + x.id, x.name, x.dose + (x.standing ? ', standing' : ', seated')); }).join('') +
+      '</div>';
+    return h + '</div>';
+  }
   if (ui.sub.tools === 'feel') {
     h += '<section class="card"><p>Feelings show up in the body first. Naming the feeling, where it sits, and what it pushes you to do gives you a choice about what happens next.</p></section>' +
-         toolRow('feel-new', '', 'feel', 'Name the feeling', 'Core feeling, body sensations, the urge, and what would help. About two minutes.') +
-         toolRow('moment-new', '', 'moment', 'Unpack a moment', 'One moment that stirred something up: your body, your feelings, what you needed. About three minutes.') +
+         toolRow('feel-new', '', 'feel', 'Name the feeling', 'Core feeling, body sensations, the urge, and what would help') +
+         toolRow('moment-new', '', 'moment', 'Unpack a moment', 'One moment that stirred something up: your body, your feelings, what you needed') +
          toolRow('panel', ' data-type="scan"', 'scan', 'Body scan', 'Seven slow stops from feet to face, noticing without changing') +
          toolRow('panel', ' data-type="urges"', 'urges', 'Urges and opposite action', 'What each feeling pushes you to do, and what helps instead') +
          toolRow('goto-pattern', '', 'pattern', 'Understand a pattern', 'A one-minute check, then one thing to try');
@@ -1196,6 +1223,9 @@ function viewTools(){
          toolRow('panel', ' data-type="shift"', 'shift', 'Shifting attention', 'Two minutes with a songbird, moving your attention between what you see and what you hear') +
          toolRow('panel', ' data-type="bls"', 'bls', 'Side to side', 'A dot to follow with your eyes, or a soft chime moving ear to ear') +
          '<p class="hint">Each calming tool asks for your stress level before and after and saves it to your grounding record. You can stop any exercise at any point; what you did still counts. Pin the ones you use most to Home.</p>';
+  } else if (ui.sub.tools === 'log') {
+    /* The log used to live here; it is now under My Path > Symptoms, next to the flare plan. */
+    ui.sub.tools = 'calm'; return viewTools();
   } else {
     h += '<section class="card"><p>Gentle movements to practise smooth, automatic movement. Do any exercises your physiotherapist has given you first. Stop if you feel sharp pain, chest pain or faint.</p></section>' +
          '<div class="stack-s">' + EXERCISES.map(function(x){ return toolRow('panel', ' data-type="move" data-id="' + x.id + '"', 'move:' + x.id, x.name, x.dose + (x.standing ? ', standing' : ', seated')); }).join('') + '</div>';
@@ -1537,9 +1567,9 @@ function panelFeel(p){
   }
   h += '<section class="card"><div class="item-head"><h2>Name the feeling</h2><span class="val">Step ' + s + ' of 5</span></div><div class="bar" aria-hidden="true"><span style="width:' + (s * 20) + '%"></span></div>';
   if (s === 1) {
-    h += '<p class="lbl">What is the closest family?</p><div class="feel-grid">' + FAMILIES.map(function(f){ return '<button type="button" class="feel-btn" aria-pressed="' + (d.family === f.id) + '" data-action="feel-family" data-id="' + f.id + '">' + esc(f.name) + '<small>' + esc(f.words.slice(0,3).join(', ').toLowerCase()) + '</small></button>'; }).join('') + '</div>';
+    h += '<p class="lbl">Which is closest to how you feel right now?</p><div class="feel-grid">' + FAMILIES.map(function(f){ return '<button type="button" class="feel-btn" aria-pressed="' + (d.family === f.id) + '" data-action="feel-family" data-id="' + f.id + '">' + esc(f.name) + '</button>'; }).join('') + '</div>';
   } else if (s === 2) {
-    h += '<p class="lbl">Closer to which word?</p>' + radioGroup('feel','word',fam.words,d.word) + '<input type="text" id="f-wordOther" value="' + esc(fam.words.indexOf(d.word) > -1 ? '' : d.word) + '" placeholder="Or your own word" data-draft="feel" data-field="word" aria-label="Your own word">' +
+    h += '<p class="lbl">Want to be more specific? <span class="meta">(optional)</span></p><p class="hint">If one of these words fits better than "' + esc(fam.name.toLowerCase()) + '", pick it or write your own. If not, skip it.</p>' + radioGroup('feel','word',fam.words,d.word) + '<input type="text" id="f-wordOther" value="' + esc(fam.words.indexOf(d.word) > -1 ? '' : d.word) + '" placeholder="Or your own word" data-draft="feel" data-field="word" aria-label="Your own word">' +
          '<div class="field"><div class="lbl-row"><span class="lbl">How strong is it?</span><span class="val">' + d.intensity + ' / 10</span></div>' + scaleButtons('feel','intensity',0,10,d.intensity,true) + '</div>';
   } else if (s === 3) {
     h += '<p class="lbl">Where is it in your body, and what does it feel like?</p><p class="hint">Pick anything that fits. In FND, spotting the body signal early is the warning sign you can act on.</p>' + chipGroup('feel','sensations',SENSATIONS,d.sensations);
@@ -2124,14 +2154,22 @@ function viewLesson(){
 /* ---------- MY PATH ---------- */
 function viewPath(){
   var cur = ui.sub.path === 'course' ? 'learn' : (ui.sub.path || 'goals');
-  var segs = [['goals','Goals'],['pacing','Pacing'],['daily','Today'],['flare','Flare plan'],['learn','Learn']];
+  if (cur === 'flare') { cur = ui.sub.path = 'symptoms'; ui.sub.symptoms = 'flare'; }
+  var segs = [['goals','Goals'],['pacing','Pacing'],['daily','Today'],['symptoms','Symptoms'],['learn','Learn']];
   var h = '<div class="stack"><h1>My path</h1>' + seg('path', segs, cur);
   if (cur === 'learn') h += viewLearn();
   else if (cur === 'goals') h += viewGoals();
   else if (cur === 'pacing') h += viewPacing();
   else if (cur === 'daily') h += viewPlanToday();
-  else h += viewFlare();
+  else h += viewSymptoms();
   return h + '</div>';
+}
+/* Symptom tracking and the flare plan sit together: both are about monitoring and managing symptoms. */
+function viewSymptoms(){
+  var cur = ui.sub.symptoms === 'flare' ? 'flare' : 'log';
+  var h = seg('symptoms', [['log','Symptom log'],['flare','Flare plan']], cur);
+  if (cur === 'flare') return h + viewFlare();
+  return h + '<p class="hint">Logging is here when you want it. It helps you and your clinician spot patterns; it is not something to do every hour.</p>' + viewTrack(true);
 }
 
 /* ---------- PLAN ---------- */
@@ -2181,7 +2219,7 @@ function viewPacing(){
     h += '<section class="card"><h2>New steady amount</h2>' +
       '<div class="field"><label class="lbl" for="f-name">Activity</label><input type="text" id="f-name" value="' + esc(d.name) + '" placeholder="For example, walking or cooking" data-draft="goal" data-field="name"></div>' +
       '<div class="field"><label class="lbl" for="f-target">Steady amount, in minutes a day</label><input type="number" inputmode="numeric" min="1" id="f-target" value="' + esc(d.target) + '" data-draft="goal" data-field="target"><span class="hint">Start lower than you think you need to.</span></div>' +
-      '<div class="field"><label class="lbl" for="f-step">Small step up, in minutes</label><input type="number" inputmode="numeric" min="1" id="f-step" value="' + esc(d.step) + '" data-draft="goal" data-field="step"></div>' +
+      '<div class="field"><label class="lbl" for="f-step">How many minutes would you like to add each time you step up?</label><input type="number" inputmode="numeric" min="1" id="f-step" value="' + esc(d.step) + '" data-draft="goal" data-field="step"><span class="hint">Once your steady amount has felt manageable for a few days in a row, the app will suggest adding this many minutes.</span></div>' +
       '<div class="row"><button type="button" class="btn btn-primary" data-action="goal-save">Save goal</button><button type="button" class="btn btn-quiet" data-action="goal-cancel">Cancel</button></div></section>';
   } else {
     h += '<div><button type="button" class="btn btn-primary" data-action="goal-new">Add an activity</button></div>';
@@ -2464,7 +2502,7 @@ function render(){
   try { if (window.speechSynthesis && ui.speaking) { window.speechSynthesis.cancel(); ui.speaking = false; } } catch(e){}
   if (ui.tab === 'course' || ui.tab === 'learn') { ui.tab = 'path'; ui.sub.path = 'learn'; }
   if (ui.tab === 'plan') { ui.tab = 'path'; ui.sub.path = ui.sub.plan === 'today' ? 'daily' : ui.sub.plan; }
-  if (ui.tab === 'track') { ui.tab = 'tools'; ui.sub.tools = 'log'; }
+  if (ui.tab === 'track' || (ui.tab === 'tools' && ui.sub.tools === 'log' && !ui.panel)) { ui.tab = 'path'; ui.sub.path = 'symptoms'; ui.sub.symptoms = 'log'; if (ui.sub.tools === 'log') ui.sub.tools = 'calm'; }
   if (ui.tab === 'milestones') { ui.tab = 'progress'; ui.sub.progress = 'milestones'; }
   if (!state.setup.done) { h = viewWelcome(); if (tabs) tabs.hidden = true; if (header) header.hidden = true; }
   else {
@@ -2486,7 +2524,7 @@ function render(){
   }
   v.innerHTML = h;
   applyColour();
-  var navTab = ({ plan:'path', course:'path', track:'tools', toolkit:'today', pattern:'today', milestones:'progress' })[ui.tab] || ui.tab;
+  var navTab = ({ plan:'path', course:'path', track:'path', toolkit:'today', pattern:'today', milestones:'progress' })[ui.tab] || ui.tab;
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function(b){
     if (b.getAttribute('data-tab') === navTab) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
@@ -2540,13 +2578,13 @@ var A = {
   'goto-plan': function(){ go('path', {path:'daily'}); },
   'goto-tools': function(){ go('tools', {tools:'calm'}); },
   'goto-tools-now': function(){ go('tools', {tools:'now'}); },
-  'goto-track': function(el){ go('tools', {tools:'log', track: el.getAttribute('data-sub') || 'episodes'}); },
+  'goto-track': function(el){ go('path', {path:'symptoms', symptoms:'log', track: el.getAttribute('data-sub') || 'episodes'}); },
   'goto-today': function(){ go('today'); },
   'goto-export': function(){ ui.exp.links = null; go('export'); },
   'goto-settings': function(){ ui.importMsg = ''; ui.confirmClear = false; ui.remindLinks = null; go('settings'); },
   'goto-milestones': function(){ ui.celebrate = []; go('progress', {progress:'milestones'}); },
   'goto-plan-pacing': function(){ go('path', {path:'pacing'}); },
-  'goto-plan-flare': function(){ go('path', {path:'flare'}); },
+  'goto-plan-flare': function(){ go('path', {path:'symptoms', symptoms:'flare'}); },
   colour: function(el){ state.profile.colour = el.getAttribute('data-val'); save(); ui.refocus = '[data-action="colour"][data-val="' + state.profile.colour + '"]'; render(); },
   'cel-next': function(){ ui.celebrate.shift(); render(); },
   'wb-dismiss': function(){ ui.welcomeBack = false; render(); },

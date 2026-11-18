@@ -392,3 +392,14 @@ html.gate-on, html.gate-on body{overflow:hidden}
 .gate-hint{color:var(--muted); font-size:15px}
 .gate-crisis{font-size:15px; color:var(--muted); border-top:1px solid var(--line); padding-top:16px; margin-top:8px}
 .gate-crisis a{color:var(--accent); font-weight:600}
+
+/* v15: time estimates on tools, and Track and plan shortcuts on Home */
+.tool-btn .item-head{align-items:center}
+.tag-time{flex:none; font-size:13px; font-weight:600; padding:2px 9px; white-space:nowrap}
+.quick-grid{display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:8px}
+.quick-grid .tool-btn{min-height:0; padding:12px; gap:2px}
+.quick-grid .tool-btn .t{font-size:16px}
+.quick-grid .tool-btn .meta{font-size:13px}
+@media (max-width:360px){ .quick-grid{grid-template-columns:1fr} }
+.seg button{min-width:0}
+.seg:has(> button:nth-child(5)) button{font-size:13px; padding:4px 1px}

@@ -133,6 +133,15 @@ versions 9 and 10 kept appearing as the old app.
   looking at files the previous version put there. It will not reload during a running
   exercise.
 
+## Version 15: changes from Nick's user feedback
+
+- **Home buttons now go where they say.** "I need help right now" opens tools picked for how the patient's FND shows up, now titled "Pick one thing to try" (it no longer says "two minutes"). "I have 2 minutes" opens **Tools → Now**, which lists every tool that can be done in about two minutes or less: paced breathing (2 min), grounding, shifting attention, side to side, name the feeling, understand a pattern, and the short movement exercises.
+- **Time estimates on every tool** (for example "About 2 min" or "2–5 min"), in Tools, the Now list and the help-right-now list. They are set in `TOOL_TIME` in `app.js`; exercises use their own `mins` (and `minMins` where the range starts lower).
+- **Symptom log moved to My Path → Symptoms**, next to the Flare plan, since both are about monitoring and managing symptoms. Tools now holds only exercises (Now, Calm, Feel, Move). Old links and saved screens that pointed at Tools → Log open the new place.
+- **Track and plan shortcuts on Home:** Symptom log, Flare plan and Learn.
+- **Pacing wording:** "Small step up, in minutes" is now "How many minutes would you like to add each time you step up?", with a line explaining when the app suggests the increase.
+- **Name the feeling:** step 1 asks "Which is closest to how you feel right now?" and no longer lists example words under each feeling. Step 2 is now clearly optional ("Want to be more specific?"), so it no longer feels like a repeat.
+
 ## Version 14: access code
 
 - **The app now asks for an access code** before anything else is shown. The code is entered once per phone; after that the phone stays unlocked, including after updates. Patients who already use the app are asked once and keep all their entries.
